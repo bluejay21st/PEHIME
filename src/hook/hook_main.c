@@ -49,6 +49,7 @@ static HWND             g_candwnd;
 static HWND             g_msgwnd;
 static int              g_cn = 0;
 static int              g_shift_clean;
+static int              g_shift_down;
 static int              g_quote_single;
 static int              g_quote_double;
 static PeimDict         g_dict;
@@ -1071,19 +1072,22 @@ static WCHAR cn_punct_for_key(UINT vk, int shift)
 }
 static int handle_key(UINT vk, int down)
 {
-    int shift = kv_down(VK_SHIFT);
+    int shift;
 
     if (vk == VK_SHIFT || vk == VK_LSHIFT || vk == VK_RSHIFT) {
         if (down) {
+            g_shift_down = 1;
             g_shift_clean = 1;
             return 0;
         }
+        g_shift_down = 0;
         if (g_shift_clean) {
             g_shift_clean = 0;
             toggle_mode();
         }
         return 0;
     }
+    shift = g_shift_down;
     if (down)
         g_shift_clean = 0;
 
@@ -1100,8 +1104,13 @@ static int handle_key(UINT vk, int down)
         return handle_en_key(vk, down, shift);
 
     {
+        if (g_cfg.log_verbose && vk >= '0' && vk <= '9')
+            peim_log("digit vk=%lu shift=%d cn=%d", (unsigned long)vk, shift, g_cn);
         WCHAR punct = cn_punct_for_key(vk, shift);
         if (punct) {
+            if (vk >= '0' && vk <= '9')
+                peim_log("digit punct vk=%lu shift=%d -> U+%04X",
+                         (unsigned long)vk, shift, (unsigned)punct);
             if (g_typed_len > 0)
                 commit_composition_for_punct();
             queue_inject(&punct, 1);
