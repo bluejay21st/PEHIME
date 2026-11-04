@@ -4,7 +4,7 @@
  * 支持的键（全部可选，未配置时用默认值）：
  *   start_mode    0=中文，1=英文（带补全，默认 1），2=英文原文（无候选）
  *   page_size     每页候选数 3~9（默认 5）
- *   font_height   候选窗字体像素高 10~40（默认 16）
+ *   ui_height     候选窗字体像素高 10~40（默认 16）
  *   en_suggest    1=英文模式显示单词补全（默认 1）
  *   log           1=写 PEIM.log（默认 1）
  *   log_verbose   1=记录每次按键 + 每次候选列表（默认 0）
@@ -22,7 +22,7 @@
 typedef struct {
     int start_mode;
     int page_size;
-    int font_height;
+    int ui_height;
     int en_suggest;
     int log;
     int log_verbose;

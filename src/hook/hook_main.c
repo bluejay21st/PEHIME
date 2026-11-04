@@ -660,7 +660,7 @@ static void update_window_at(const POINT *anchor)
 
     memset(&v, 0, sizeof(v));
     v.mode = g_mode;
-    v.font_height = g_cfg.font_height;
+    v.font_height = g_cfg.ui_height;
     v.notify = g_msgwnd;
     memcpy(v.pinyin, g_typed, g_typed_len);
     v.pinyin[g_typed_len] = 0;
@@ -777,7 +777,7 @@ static void en_refresh(void)
 
     memset(&v, 0, sizeof(v));
     v.mode = 0;
-    v.font_height = g_cfg.font_height;
+    v.font_height = g_cfg.ui_height;
     v.notify = g_msgwnd;
     memcpy(v.pinyin, g_en_buf, (size_t)g_en_len);
     v.pinyin[g_en_len] = 0;
