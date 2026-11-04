@@ -9,15 +9,15 @@
  *  - 拼音用"音节权重 + 动态规划"切分；候选按：整串完全匹配词 → 音节候选 → 前缀候选
  *    （zhongg → 二字词优先；zhongguod → 三字词；fangan → 方案）
  *  - 输入不是合法拼音且长度 2~4 时支持简拼（cx→程序、cxy→程序员、cpgl→磁盘管理）
- *  - 中文模式固定转换主键盘符号，英文模式标点原样；原文候选用于无法解析/首字母大写
+ *  - 标点按键盘原样输入（不做中文标点转换）；原文候选用于无法解析/首字母大写
  *  - 候选窗两行：第一行拼音 + 闪烁光标，第二行候选；▲/▼ 可点击翻页
  *
  * 英文输入：
  *  - 字母照常输入；按英文词库给出短词优先的补全候选，1~9/Tab 选择，空格结束联想
  *
  * 界面/退出：
- *  - 默认英文态（start_mode=1），避免 PE 菜单/工具按键被吞
- *  - 有托盘时显示 中/英 图标；无托盘（PE）时右下角显示中/英方框
+ *  - 默认英文态（start_cn=0），避免 PE 菜单/工具按键被吞
+ *  - 有托盘时显示托盘图标；无托盘（PE）时右下角显示中/英方框
  *  - 退出：托盘/方框右键菜单"退出"（无退出快捷键）
  */
 #include <windows.h>
@@ -47,9 +47,8 @@ typedef struct {
 static HHOOK            g_hook;
 static HWND             g_candwnd;
 static HWND             g_msgwnd;
-static int              g_mode = PEIM_MODE_EN;
+static int              g_cn = 0;
 static int              g_shift_clean;
-static int              g_shift_down;
 static int              g_quote_single;
 static int              g_quote_double;
 static PeimDict         g_dict;
@@ -659,8 +658,8 @@ static void update_window_at(const POINT *anchor)
         get_anchor(&pt);
 
     memset(&v, 0, sizeof(v));
-    v.mode = g_mode;
-    v.font_height = g_cfg.ui_height;
+    v.mode = g_cn;
+    v.font_height = g_cfg.font_height;
     v.notify = g_msgwnd;
     memcpy(v.pinyin, g_typed, g_typed_len);
     v.pinyin[g_typed_len] = 0;
@@ -739,7 +738,7 @@ static void flash_mode(void)
     if (!g_candwnd)
         return;
     get_anchor(&pt);
-    peim_cand_flash(g_candwnd, g_mode, pt);
+    peim_cand_flash(g_candwnd, g_cn, pt);
 }
 
 static int is_letter_vk(UINT vk);   /* 定义在后面，英文联想里先用 */
@@ -777,7 +776,7 @@ static void en_refresh(void)
 
     memset(&v, 0, sizeof(v));
     v.mode = 0;
-    v.font_height = g_cfg.ui_height;
+    v.font_height = g_cfg.font_height;
     v.notify = g_msgwnd;
     memcpy(v.pinyin, g_en_buf, (size_t)g_en_len);
     v.pinyin[g_en_len] = 0;
@@ -976,7 +975,6 @@ static void commit_composition_for_punct(void)
     clear_all();
     hide_window();
 }
-
 static void backspace_one(void)
 {
     if (g_typed_len <= 0)
@@ -996,20 +994,15 @@ static void backspace_one(void)
 /* 按键处理                                                            */
 /* ------------------------------------------------------------------ */
 
-static const char *mode_name(int mode)
-{
-    return mode == PEIM_MODE_CN ? "CN" : "EN";
-}
-
 static void toggle_mode(void)
 {
-    g_mode = (g_mode == PEIM_MODE_CN) ? PEIM_MODE_EN : PEIM_MODE_CN;
+    g_cn = !g_cn;
     g_quote_single = 0;
     g_quote_double = 0;
-    peim_log("toggle -> %s", mode_name(g_mode));
+    peim_log("toggle -> %s", g_cn ? "CN" : "EN");
     clear_all();
     en_clear();
-    peim_tray_set_mode(g_mode == PEIM_MODE_CN);
+    peim_tray_set_mode(g_cn);
     flash_mode();
 }
 
@@ -1023,12 +1016,11 @@ static int is_letter_vk(UINT vk)
     return vk >= 'A' && vk <= 'Z';
 }
 
-/* 中文模式固定标点映射：返回要注入的字符串；NULL=不转换（英文符号原样放行） */
+/* 中文模式固定标点映射：返回字符串；NULL=英文原样放行 */
 static const WCHAR *cn_punct_for_key(UINT vk, int shift, int *out_len)
 {
     *out_len = 1;
     switch (vk) {
-    /* 数字行：只转换这几个，其余保持英文符号 */
     case '1':
         if (shift) return L"\xFF01"; /* ！ */
         break;
@@ -1044,44 +1036,39 @@ static const WCHAR *cn_punct_for_key(UINT vk, int shift, int *out_len)
     case '0':
         if (shift) return L"\xFF09"; /* ） */
         break;
-
-    /* 标点键 */
     case VK_OEM_COMMA:  return shift ? L"\x300A" : L"\xFF0C"; /* 《 ， */
     case VK_OEM_PERIOD: return shift ? L"\x300B" : L"\x3002"; /* 》 。 */
     case VK_OEM_1:      return shift ? L"\xFF1A" : L"\xFF1B"; /* ： ； */
     case VK_OEM_2:
         if (shift) return L"\xFF1F"; /* ？ */
-        break;                       /* / 原样 */
+        break;
     case VK_OEM_3:
         if (!shift) return L"\x00B7"; /* · */
-        break;                        /* ~ 原样 */
+        break;
     case VK_OEM_4:
         if (!shift) return L"\x3010"; /* 【 */
-        break;                        /* { 原样 */
+        break;
     case VK_OEM_5:
         if (!shift) return L"\x3001"; /* 、 */
-        break;                        /* | 原样 */
+        break;
     case VK_OEM_6:
         if (!shift) return L"\x3011"; /* 】 */
-        break;                        /* } 原样 */
+        break;
     case VK_OEM_MINUS:
         if (g_nitems > 0)
-            break;                     /* 候选列表时 - 用于上一页 */
+            break;
         if (shift) { *out_len = 2; return L"\x2014\x2014"; } /* —— */
-        break;                         /* - 原样 */
-
-    /* 引号成对切换 */
+        break;
     case VK_OEM_7:
         if (shift) {
-            const WCHAR *q = g_quote_double ? L"\x201D" : L"\x201C"; /* ” “ */
+            const WCHAR *q = g_quote_double ? L"\x201D" : L"\x201C";
             g_quote_double = !g_quote_double;
             return q;
         } else {
-            const WCHAR *q = g_quote_single ? L"\x2019" : L"\x2018"; /* ’ ‘ */
+            const WCHAR *q = g_quote_single ? L"\x2019" : L"\x2018";
             g_quote_single = !g_quote_single;
             return q;
         }
-
     default:
         break;
     }
@@ -1090,22 +1077,19 @@ static const WCHAR *cn_punct_for_key(UINT vk, int shift, int *out_len)
 }
 static int handle_key(UINT vk, int down)
 {
-    int shift;
+    int shift = kv_down(VK_SHIFT);
 
     if (vk == VK_SHIFT || vk == VK_LSHIFT || vk == VK_RSHIFT) {
         if (down) {
-            g_shift_down = 1;
             g_shift_clean = 1;
             return 0;
         }
-        g_shift_down = 0;
         if (g_shift_clean) {
             g_shift_clean = 0;
             toggle_mode();
         }
         return 0;
     }
-    shift = g_shift_down;
     if (down)
         g_shift_clean = 0;
 
@@ -1114,22 +1098,16 @@ static int handle_key(UINT vk, int down)
 
 
     if (kv_down(VK_CONTROL) || kv_down(VK_MENU) || kv_down(VK_LWIN) || kv_down(VK_RWIN)) {
-        if (g_mode != PEIM_MODE_CN)
+        if (!g_cn)
             en_clear();   /* 组合键打断英文联想 */
         return 0;
     }
-    if (g_mode == PEIM_MODE_EN)
+    if (!g_cn)
         return handle_en_key(vk, down, shift);
-
     {
-        if (g_cfg.log_verbose && vk >= '0' && vk <= '9')
-            peim_log("digit vk=%lu shift=%d mode=%d", (unsigned long)vk, shift, g_mode);
         int plen = 0;
         const WCHAR *punct = cn_punct_for_key(vk, shift, &plen);
         if (punct && plen > 0) {
-            if (vk >= '0' && vk <= '9')
-                peim_log("digit punct vk=%lu shift=%d len=%d first=U+%04X",
-                         (unsigned long)vk, shift, plen, (unsigned)punct[0]);
             if (g_typed_len > 0)
                 commit_composition_for_punct();
             queue_inject(punct, plen);
@@ -1392,10 +1370,8 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE prev, LPSTR cmd, int show)
     peim_config_load(&g_cfg, g_dir);
     if (g_cfg.log)
         peim_log_open(g_dir, g_cfg.log_verbose);
-    g_mode = g_cfg.start_mode;
-    if (g_mode < PEIM_MODE_CN || g_mode >= PEIM_MODE_COUNT)
-        g_mode = PEIM_MODE_EN;
-    peim_log("PEIMH start, dir=%s, start_mode=%d, ver=%ls", g_dir, g_mode, PEIM_HOOK_VERSION);
+    g_cn = g_cfg.start_cn ? 1 : 0;
+    peim_log("PEIMH start, dir=%s, start_cn=%d, ver=%ls", g_dir, g_cn, PEIM_HOOK_VERSION);
 
     /* 测试模式：不弹窗、不提权、不装钩子；完成自检后直接退出 */
     if (wstr_has(GetCommandLineW(), L"--selftest")) {
@@ -1491,10 +1467,10 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE prev, LPSTR cmd, int show)
 
     {
         int ui = peim_tray_init(hinst, msgwnd);
-        peim_tray_set_mode(g_mode == PEIM_MODE_CN);
+        peim_tray_set_mode(g_cn);
         peim_log("UI: %s, mode=%s",
                  ui == 1 ? "tray icon" : ui == 0 ? "corner indicator" : "FAILED",
-                 mode_name(g_mode));
+                 g_cn ? "CN" : "EN");
     }
 
     g_hook = SetWindowsHookExW(WH_KEYBOARD_LL, ll_proc, hinst, 0);
