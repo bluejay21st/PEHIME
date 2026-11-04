@@ -1,9 +1,10 @@
 /*
  * peim_tray.c —— 托盘图标 / PE 右下角状态方框（实现见 peim_tray.h）
  *
- * 只做两件事：显示当前中/英状态；把"切换/退出"请求发给主程序的消息窗口。
+ * 只做两件事：显示当前输入模式（中/英/键盘）；把"切换/退出"请求发给主程序的消息窗口。
  */
 #include "peim_tray.h"
+#include "peim_config.h"
 
 #include <shellapi.h>
 #include <stdio.h>
@@ -22,11 +23,39 @@ static HWND        g_tray_wnd;
 static HWND        g_ind_wnd;
 static HICON       g_icon_cn;
 static HICON       g_icon_en;
-static int         g_cn = 1;
-static int         g_mode;   /* 0=无 1=托盘 2=右下角方框 */
+static HICON       g_icon_raw;
+static int         g_input_mode = PEIM_MODE_EN;
+static int         g_ui_mode;   /* 0=无 1=托盘 2=右下角方框 */
 
-/* 生成一个带"中/英"字样的 16x16 图标 */
-static HICON make_icon(int cn)
+/* 16x16/30x30 共用的键盘图形（白线，蓝底由调用方填充） */
+static void draw_keyboard(HDC dc, const RECT *rc)
+{
+    int w = rc->right - rc->left;
+    int h = rc->bottom - rc->top;
+    int x0 = rc->left + w / 8;
+    int y0 = rc->top + h / 4;
+    int x1 = rc->right - w / 8;
+    int y1 = rc->bottom - h / 4;
+    int row, col;
+    HPEN pen = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
+    HGDIOBJ oldpen = SelectObject(dc, pen);
+    HGDIOBJ oldbrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+
+    Rectangle(dc, x0, y0, x1, y1);
+    for (row = 1; row <= 2; ++row) {
+        int ky = y0 + row * (y1 - y0) / 3;
+        for (col = 1; col <= 4; ++col) {
+            int kx = x0 + col * (x1 - x0) / 5;
+            Rectangle(dc, kx, ky, kx + 2, ky + 2);
+        }
+    }
+    SelectObject(dc, oldbrush);
+    SelectObject(dc, oldpen);
+    DeleteObject(pen);
+}
+
+/* 生成 16x16 图标：0=中，1=英，2=键盘 */
+static HICON make_icon(int mode)
 {
     static const BYTE zero_mask[16 * 2] = { 0 };
     HDC screen = GetDC(NULL);
@@ -38,25 +67,29 @@ static HICON make_icon(int cn)
     HGDIOBJ old = SelectObject(dc, color);
     RECT rc = { 0, 0, 16, 16 };
     HBRUSH bg = CreateSolidBrush(RGB(0, 96, 172));
-    HFONT font;
-    HGDIOBJ oldfont;
-    WCHAR txt[2];
 
     FillRect(dc, &rc, bg);
-    font = CreateFontW(-13, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-                       DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                       CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"宋体");
-    oldfont = SelectObject(dc, font);
-    SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, RGB(255, 255, 255));
-    txt[0] = cn ? 0x4E2D : 0x82F1;
-    txt[1] = 0;
-    DrawTextW(dc, txt, 1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    SelectObject(dc, oldfont);
+    if (mode == PEIM_MODE_RAW) {
+        draw_keyboard(dc, &rc);
+    } else {
+        HFONT font;
+        HGDIOBJ oldfont;
+        WCHAR txt[2];
+        font = CreateFontW(-13, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                           DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                           CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"宋体");
+        oldfont = SelectObject(dc, font);
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, RGB(255, 255, 255));
+        txt[0] = mode == PEIM_MODE_CN ? 0x4E2D : 0x82F1;
+        txt[1] = 0;
+        DrawTextW(dc, txt, 1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(dc, oldfont);
+        DeleteObject(font);
+    }
 
     SelectObject(dc, old);
     DeleteObject(bg);
-    DeleteObject(font);
     DeleteDC(dc);
     ReleaseDC(NULL, screen);
 
@@ -70,13 +103,30 @@ static HICON make_icon(int cn)
     return icon;
 }
 
+static HICON mode_icon(void)
+{
+    if (g_input_mode == PEIM_MODE_CN)
+        return g_icon_cn;
+    if (g_input_mode == PEIM_MODE_RAW)
+        return g_icon_raw;
+    return g_icon_en;
+}
+
+static const WCHAR *mode_tip(void)
+{
+    if (g_input_mode == PEIM_MODE_CN)
+        return L"PEIM 输入法 - 中文";
+    if (g_input_mode == PEIM_MODE_RAW)
+        return L"PEIM 输入法 - 英文原文";
+    return L"PEIM 输入法 - 英文（补全）";
+}
 static void show_menu(HWND owner, HWND notify)
 {
     HMENU menu = CreatePopupMenu();
     POINT pt;
     int cmd;
 
-    AppendMenuW(menu, MF_STRING, MENU_TOGGLE, L"切换中/英文");
+    AppendMenuW(menu, MF_STRING, MENU_TOGGLE, L"切换输入模式（中/英/原文）");
     AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
     AppendMenuW(menu, MF_STRING, MENU_QUIT, L"退出");
 
@@ -103,8 +153,8 @@ static void update_tray(void)
     nid.hWnd = g_tray_wnd;
     nid.uID = TRAY_ID;
     nid.uFlags = NIF_ICON | NIF_TIP;
-    nid.hIcon = g_cn ? g_icon_cn : g_icon_en;
-    lstrcpynW(nid.szTip, g_cn ? L"PEIM 输入法 - 中文" : L"PEIM 输入法 - 英文", 64);
+    nid.hIcon = mode_icon();
+    lstrcpynW(nid.szTip, mode_tip(), 64);
     Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
 
@@ -145,8 +195,9 @@ static int init_tray(void)
     if (!g_tray_wnd)
         return 0;
 
-    g_icon_cn = make_icon(1);
-    g_icon_en = make_icon(0);
+    g_icon_cn = make_icon(PEIM_MODE_CN);
+    g_icon_en = make_icon(PEIM_MODE_EN);
+    g_icon_raw = make_icon(PEIM_MODE_RAW);
 
     memset(&nid, 0, sizeof(nid));
     nid.cbSize = sizeof(nid);
@@ -154,8 +205,8 @@ static int init_tray(void)
     nid.uID = TRAY_ID;
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = TRAY_CALLBACK;
-    nid.hIcon = g_cn ? g_icon_cn : g_icon_en;
-    lstrcpynW(nid.szTip, g_cn ? L"PEIM 输入法 - 中文" : L"PEIM 输入法 - 英文", 64);
+    nid.hIcon = mode_icon();
+    lstrcpynW(nid.szTip, mode_tip(), 64);
     if (!Shell_NotifyIconW(NIM_ADD, &nid)) {
         DestroyWindow(g_tray_wnd);
         g_tray_wnd = NULL;
@@ -210,17 +261,21 @@ static void ind_paint(HWND wnd)
     SelectObject(dc, oldpen);
     DeleteObject(pen);
 
-    font = CreateFontW(-18, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-                       DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                       CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"宋体");
-    oldfont = SelectObject(dc, font);
-    SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, RGB(255, 255, 255));
-    txt[0] = g_cn ? 0x4E2D : 0x82F1;
-    txt[1] = 0;
-    DrawTextW(dc, txt, 1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    SelectObject(dc, oldfont);
-    DeleteObject(font);
+    if (g_input_mode == PEIM_MODE_RAW) {
+        draw_keyboard(dc, &rc);
+    } else {
+        font = CreateFontW(-18, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                           DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                           CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"宋体");
+        oldfont = SelectObject(dc, font);
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, RGB(255, 255, 255));
+        txt[0] = g_input_mode == PEIM_MODE_CN ? 0x4E2D : 0x82F1;
+        txt[1] = 0;
+        DrawTextW(dc, txt, 1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(dc, oldfont);
+        DeleteObject(font);
+    }
     EndPaint(wnd, &ps);
 }
 
@@ -278,23 +333,25 @@ int peim_tray_init(HINSTANCE hinst, HWND notify)
 {
     g_hinst = hinst;
     g_notify = notify;
-    g_mode = 0;
+    g_ui_mode = 0;
 
     /* 调试用：设置 PEIM_INDICATOR=1 可强制走"右下角方框"模式 */
     if (getenv("PEIM_INDICATOR")) {
         if (init_indicator())
-            g_mode = 2;
+            g_ui_mode = 2;
     } else if (init_tray()) {
-        g_mode = 1;
+        g_ui_mode = 1;
     } else if (init_indicator()) {
-        g_mode = 2;
+        g_ui_mode = 2;
     }
-    return g_mode == 1 ? 1 : (g_mode == 2 ? 0 : -1);
+    return g_ui_mode == 1 ? 1 : (g_ui_mode == 2 ? 0 : -1);
 }
 
-void peim_tray_set_mode(int cn)
+void peim_tray_set_mode(int mode)
 {
-    g_cn = cn ? 1 : 0;
+    if (mode < PEIM_MODE_CN || mode > PEIM_MODE_RAW)
+        mode = PEIM_MODE_EN;
+    g_input_mode = mode;
     if (g_tray_wnd) {
         update_tray();
     } else if (g_ind_wnd) {
@@ -327,6 +384,10 @@ void peim_tray_destroy(void)
     if (g_icon_en) {
         DestroyIcon(g_icon_en);
         g_icon_en = NULL;
+    }
+    if (g_icon_raw) {
+        DestroyIcon(g_icon_raw);
+        g_icon_raw = NULL;
     }
 
 }

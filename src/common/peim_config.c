@@ -26,8 +26,8 @@ static void write_default_config(const char *path)
     if (!f)
         return;
     fputs("\xEF\xBB\xBF"
-          "; start_cn      0=启动英文（默认），1=启动中文\n"
-          "start_cn=0\n"
+          "; start_mode    0=中文，1=英文（带补全，默认），2=英文原文（无候选）\n"
+          "start_mode=1\n"
           "; page_size     每页候选数 3~9\n"
           "page_size=5\n"
           "; font_height   候选窗字体像素高 10~40\n"
@@ -46,10 +46,11 @@ void peim_config_load(PeimConfig *cfg, const char *exe_dir)
     char path[MAX_PATH * 2];
     FILE *f;
     char line[512];
+    int have_start_mode = 0;
 
     if (!cfg)
         return;
-    cfg->start_cn = 0;
+    cfg->start_mode = PEIM_MODE_EN;
     cfg->page_size = 5;
     cfg->font_height = 16;
     cfg->en_suggest = 1;
@@ -94,9 +95,17 @@ void peim_config_load(PeimConfig *cfg, const char *exe_dir)
         val = eq + 1;
         trim(key);
         trim(val);
-        if (!_stricmp(key, "start_cn"))
-            cfg->start_cn = atoi(val) ? 1 : 0;
-        else if (!_stricmp(key, "page_size")) {
+        if (!_stricmp(key, "start_mode")) {
+            int v = atoi(val);
+            if (v >= 0 && v < PEIM_MODE_COUNT) {
+                cfg->start_mode = v;
+                have_start_mode = 1;
+            }
+        } else if (!_stricmp(key, "start_cn")) {
+            /* 兼容旧配置：start_cn=1 -> 中文，0 -> 英文（带补全） */
+            if (!have_start_mode)
+                cfg->start_mode = atoi(val) ? PEIM_MODE_CN : PEIM_MODE_EN;
+        } else if (!_stricmp(key, "page_size")) {
             int v = atoi(val);
             if (v >= 3 && v <= 9)
                 cfg->page_size = v;
