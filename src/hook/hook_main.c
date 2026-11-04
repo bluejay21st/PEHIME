@@ -1026,7 +1026,7 @@ static WCHAR cn_punct_for_key(UINT vk, int shift)
     case '1':           return shift ? 0xFF01 : 0; /* ！ */
     case '2':           return shift ? 0xFF20 : 0; /* ＠ */
     case '3':           return shift ? 0xFF03 : 0; /* ＃ */
-    case '4':           return shift ? 0xFF04 : 0; /* ＄ */
+    case '4':           return shift ? 0xFFE5 : 0; /* ￥ */
     case '5':           return shift ? 0xFF05 : 0; /* ％ */
     case '6':           return shift ? 0xFF3E : 0; /* ＾ */
     case '7':           return shift ? 0xFF06 : 0; /* ＆ */
