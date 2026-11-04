@@ -9,7 +9,7 @@
  *  - 拼音用"音节权重 + 动态规划"切分；候选按：整串完全匹配词 → 音节候选 → 前缀候选
  *    （zhongg → 二字词优先；zhongguod → 三字词；fangan → 方案）
  *  - 输入不是合法拼音且长度 2~4 时支持简拼（cx→程序、cxy→程序员、cpgl→磁盘管理）
- *  - 标点按键盘原样输入（不做中文标点转换）；原文候选用于无法解析/首字母大写
+ *  - 中文模式固定转换常用标点，英文模式标点原样；原文候选用于无法解析/首字母大写
  *  - 候选窗两行：第一行拼音 + 闪烁光标，第二行候选；▲/▼ 可点击翻页
  *
  * 英文输入：
@@ -957,6 +957,23 @@ static void select_item(int idx)
     }
 }
 
+/* 中文标点前把当前组字全部上屏，避免标点后残留隐藏的拼音缓冲 */
+static void commit_composition_for_punct(void)
+{
+    int guard = 64;
+
+    while (guard-- > 0 && g_typed_len > 0 && g_nitems > 0) {
+        int idx = g_page * page_size();
+        if (idx >= g_nitems)
+            idx = 0;
+        select_item(idx);
+    }
+    if (g_typed_len > 0)
+        commit_raw_typed();
+    clear_all();
+    hide_window();
+}
+
 static void backspace_one(void)
 {
     if (g_typed_len <= 0)
@@ -996,6 +1013,24 @@ static int is_letter_vk(UINT vk)
     return vk >= 'A' && vk <= 'Z';
 }
 
+/* 中文模式固定标点映射：0=不转换（英文符号原样放行） */
+static WCHAR cn_punct_for_key(UINT vk, int shift)
+{
+    switch (vk) {
+    case VK_OEM_COMMA:  return shift ? 0 : 0xFF0C; /* ， */
+    case VK_OEM_PERIOD: return shift ? 0 : 0x3002; /* 。 */
+    case VK_OEM_1:      return shift ? 0xFF1A : 0xFF1B; /* ： ； */
+    case VK_OEM_2:      return shift ? 0xFF1F : 0;      /* ？；/ 原样 */
+    case VK_OEM_4:      return shift ? 0 : 0x3010; /* 【 */
+    case VK_OEM_6:      return shift ? 0 : 0x3011; /* 】 */
+    case VK_OEM_5:      return shift ? 0 : 0x3001; /* 、 */
+    case '1':           return shift ? 0xFF01 : 0; /* ！ */
+    case '9':           return shift ? 0xFF08 : 0; /* （ */
+    case '0':           return shift ? 0xFF09 : 0; /* ） */
+    default:            return 0;
+    }
+}
+
 static int handle_key(UINT vk, int down)
 {
     int shift = kv_down(VK_SHIFT);
@@ -1025,6 +1060,19 @@ static int handle_key(UINT vk, int down)
     }
     if (!g_cn)
         return handle_en_key(vk, down, shift);
+
+    {
+        WCHAR punct = cn_punct_for_key(vk, shift);
+        if (punct) {
+            if (g_typed_len > 0)
+                commit_composition_for_punct();
+            queue_inject(&punct, 1);
+            hide_window();
+            if (g_cfg.log_verbose)
+                peim_log("punct U+%04X", (unsigned)punct);
+            return 1;
+        }
+    }
 
     if (is_letter_vk(vk)) {
         char ch;
