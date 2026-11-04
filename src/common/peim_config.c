@@ -26,7 +26,7 @@ static void write_default_config(const char *path)
     if (!f)
         return;
     fputs("\xEF\xBB\xBF"
-          "; start_mode    0=中文，1=英文（带补全，默认），2=英文原文（无候选）\n"
+          "; start_mode    0=中文，1=英文（带补全，默认）\n"
           "start_mode=1\n"
           "; page_size     每页候选数 3~9\n"
           "page_size=5\n"

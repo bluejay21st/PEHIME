@@ -1,5 +1,4 @@
 #include "peim_candwin.h"
-#include "peim_config.h"
 
 #include <string.h>
 
@@ -19,7 +18,7 @@ static HWND            g_wnd;
 static PeimCandView    g_view;
 static HFONT           g_font;
 static int             g_font_h = 16;
-static UINT_PTR        g_timer;        /* 模式提示自动隐藏 */
+static UINT_PTR        g_timer;        /* 中/英提示自动隐藏 */
 static UINT_PTR        g_caret_timer;  /* 拼音后的闪烁光标 */
 static int             g_caret_on = 1;
 static RECT            g_up_rect;
@@ -52,10 +51,7 @@ static void ensure_font(int height)
 
 static void mode_text(WCHAR *buf, int mode)
 {
-    if (mode == PEIM_MODE_RAW)
-        buf[0] = 0x952E; /* 键 */
-    else
-        buf[0] = mode == PEIM_MODE_CN ? 0x4E2D : 0x82F1; /* 中 / 英 */
+    buf[0] = mode ? 0x4E2D : 0x82F1; /* 中 / 英 */
     buf[1] = 0;
 }
 
@@ -281,7 +277,7 @@ static void paint(HWND wnd)
             draw_page_arrows(mem, x, y);
         }
     } else if (!has_pinyin_row(&g_view)) {
-        /* 模式提示：单行居中显示（不再是候选行开头） */
+        /* 中/英提示：单行居中显示（不再是候选行开头） */
         WCHAR m[2];
         SIZE sz;
         mode_text(m, g_view.mode);
@@ -404,7 +400,7 @@ void peim_cand_show(HWND wnd, const PeimCandView *view, POINT pt_screen)
     stop_timers(wnd);
     ensure_font(g_view.font_height);
 
-    /* 组字时启动闪烁光标；模式提示时不需要 */
+    /* 组字时启动闪烁光标；中/英提示时不需要 */
     if (has_pinyin_row(&g_view)) {
         g_caret_on = 1;
         g_caret_timer = SetTimer(wnd, 2, CARET_MS, NULL);

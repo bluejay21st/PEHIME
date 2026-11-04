@@ -5,7 +5,7 @@
  *       (KEYEVENTF_UNICODE) 把字符注入前台窗口。
  *
  * 中文输入：
- *  - 字母（含 Shift+字母）进入缓冲，最多 32 个字母；Shift 单击切换 中/英/原文
+ *  - 字母（含 Shift+字母）进入缓冲，最多 32 个字母；Shift 单击切换中/英
  *  - 拼音用"音节权重 + 动态规划"切分；候选按：整串完全匹配词 → 音节候选 → 前缀候选
  *    （zhongg → 二字词优先；zhongguod → 三字词；fangan → 方案）
  *  - 输入不是合法拼音且长度 2~4 时支持简拼（cx→程序、cxy→程序员、cpgl→磁盘管理）
@@ -16,8 +16,8 @@
  *  - 字母照常输入；按英文词库给出短词优先的补全候选，1~9/Tab 选择，空格结束联想
  *
  * 界面/退出：
- *  - 默认英文（补全）态（start_mode=1），避免 PE 菜单/工具按键被吞
- *  - 有托盘时显示 中/英/键盘 图标；无托盘（PE）时右下角显示对应方框
+ *  - 默认英文态（start_mode=1），避免 PE 菜单/工具按键被吞
+ *  - 有托盘时显示 中/英 图标；无托盘（PE）时右下角显示中/英方框
  *  - 退出：托盘/方框右键菜单"退出"（无退出快捷键）
  */
 #include <windows.h>
@@ -998,20 +998,18 @@ static void backspace_one(void)
 
 static const char *mode_name(int mode)
 {
-    return mode == PEIM_MODE_CN ? "CN" : (mode == PEIM_MODE_RAW ? "RAW" : "EN");
+    return mode == PEIM_MODE_CN ? "CN" : "EN";
 }
 
 static void toggle_mode(void)
 {
-    g_mode++;
-    if (g_mode >= PEIM_MODE_COUNT)
-        g_mode = PEIM_MODE_CN;
+    g_mode = (g_mode == PEIM_MODE_CN) ? PEIM_MODE_EN : PEIM_MODE_CN;
     g_quote_single = 0;
     g_quote_double = 0;
     peim_log("toggle -> %s", mode_name(g_mode));
     clear_all();
     en_clear();
-    peim_tray_set_mode(g_mode);
+    peim_tray_set_mode(g_mode == PEIM_MODE_CN);
     flash_mode();
 }
 
@@ -1120,8 +1118,6 @@ static int handle_key(UINT vk, int down)
             en_clear();   /* 组合键打断英文联想 */
         return 0;
     }
-    if (g_mode == PEIM_MODE_RAW)
-        return 0;   /* 英文原文：所有键原样放行，不组字、不显示候选 */
     if (g_mode == PEIM_MODE_EN)
         return handle_en_key(vk, down, shift);
 
@@ -1495,7 +1491,7 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE prev, LPSTR cmd, int show)
 
     {
         int ui = peim_tray_init(hinst, msgwnd);
-        peim_tray_set_mode(g_mode);
+        peim_tray_set_mode(g_mode == PEIM_MODE_CN);
         peim_log("UI: %s, mode=%s",
                  ui == 1 ? "tray icon" : ui == 0 ? "corner indicator" : "FAILED",
                  mode_name(g_mode));

@@ -2,7 +2,7 @@
  * peim_config.h —— 极简 INI 配置（peim.ini 与 EXE 同目录）
  *
  * 支持的键（全部可选，未配置时用默认值）：
- *   start_mode    0=中文，1=英文（带补全，默认 1），2=英文原文（无候选）
+ *   start_mode    0=中文，1=英文（带补全，默认 1）
  *   page_size     每页候选数 3~9（默认 5）
  *   ui_height     候选窗字体像素高 10~40（默认 16）
  *   en_suggest    1=英文模式显示单词补全（默认 1）
@@ -16,8 +16,7 @@
 
 #define PEIM_MODE_CN   0
 #define PEIM_MODE_EN   1
-#define PEIM_MODE_RAW  2
-#define PEIM_MODE_COUNT 3
+#define PEIM_MODE_COUNT 2
 
 typedef struct {
     int start_mode;
