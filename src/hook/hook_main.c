@@ -9,7 +9,7 @@
  *  - 拼音用"音节权重 + 动态规划"切分；候选按：整串完全匹配词 → 音节候选 → 前缀候选
  *    （zhongg → 二字词优先；zhongguod → 三字词；fangan → 方案）
  *  - 输入不是合法拼音且长度 2~4 时支持简拼（cx→程序、cxy→程序员、cpgl→磁盘管理）
- *  - 中文模式固定转换常用标点，英文模式标点原样；原文候选用于无法解析/首字母大写
+ *  - 中文模式固定转换主键盘符号，英文模式标点原样；原文候选用于无法解析/首字母大写
  *  - 候选窗两行：第一行拼音 + 闪烁光标，第二行候选；▲/▼ 可点击翻页
  *
  * 英文输入：
@@ -49,6 +49,8 @@ static HWND             g_candwnd;
 static HWND             g_msgwnd;
 static int              g_cn = 0;
 static int              g_shift_clean;
+static int              g_quote_single;
+static int              g_quote_double;
 static PeimDict         g_dict;
 static int              g_dict_ok;
 static PeimConfig       g_cfg;
@@ -996,6 +998,8 @@ static void backspace_one(void)
 static void toggle_mode(void)
 {
     g_cn = !g_cn;
+    g_quote_single = 0;
+    g_quote_double = 0;
     peim_log("toggle -> %s", g_cn ? "CN" : "EN");
     clear_all();
     en_clear();
@@ -1017,20 +1021,54 @@ static int is_letter_vk(UINT vk)
 static WCHAR cn_punct_for_key(UINT vk, int shift)
 {
     switch (vk) {
-    case VK_OEM_COMMA:  return shift ? 0 : 0xFF0C; /* ， */
-    case VK_OEM_PERIOD: return shift ? 0 : 0x3002; /* 。 */
-    case VK_OEM_1:      return shift ? 0xFF1A : 0xFF1B; /* ： ； */
-    case VK_OEM_2:      return shift ? 0xFF1F : 0;      /* ？；/ 原样 */
-    case VK_OEM_4:      return shift ? 0 : 0x3010; /* 【 */
-    case VK_OEM_6:      return shift ? 0 : 0x3011; /* 】 */
-    case VK_OEM_5:      return shift ? 0 : 0x3001; /* 、 */
+    /* 主键盘数字行（Shift） */
     case '1':           return shift ? 0xFF01 : 0; /* ！ */
+    case '2':           return shift ? 0xFF20 : 0; /* ＠ */
+    case '3':           return shift ? 0xFF03 : 0; /* ＃ */
+    case '4':           return shift ? 0xFF04 : 0; /* ＄ */
+    case '5':           return shift ? 0xFF05 : 0; /* ％ */
+    case '6':           return shift ? 0xFF3E : 0; /* ＾ */
+    case '7':           return shift ? 0xFF06 : 0; /* ＆ */
+    case '8':           return shift ? 0xFF0A : 0; /* ＊ */
     case '9':           return shift ? 0xFF08 : 0; /* （ */
     case '0':           return shift ? 0xFF09 : 0; /* ） */
-    default:            return 0;
+
+    /* 标点键 */
+    case VK_OEM_COMMA:  return shift ? 0x300A : 0xFF0C; /* 《 ， */
+    case VK_OEM_PERIOD: return shift ? 0x300B : 0x3002; /* 》 。 */
+    case VK_OEM_1:      return shift ? 0xFF1A : 0xFF1B; /* ： ； */
+    case VK_OEM_2:      return shift ? 0xFF1F : 0xFF0F; /* ？ ／ */
+    case VK_OEM_3:      return shift ? 0xFF5E : 0xFF40; /* ～ ｀ */
+    case VK_OEM_4:      return shift ? 0xFF5B : 0x3010; /* ｛ 【 */
+    case VK_OEM_5:      return shift ? 0xFF5C : 0x3001; /* ｜ 、 */
+    case VK_OEM_6:      return shift ? 0xFF5D : 0x3011; /* ｝ 】 */
+
+    /* 引号成对切换 */
+    case VK_OEM_7:
+        if (shift) {
+            WCHAR q = g_quote_double ? 0x201D : 0x201C; /* ” “ */
+            g_quote_double = !g_quote_double;
+            return q;
+        } else {
+            WCHAR q = g_quote_single ? 0x2019 : 0x2018; /* ’ ‘ */
+            g_quote_single = !g_quote_single;
+            return q;
+        }
+
+    /* - / = 在候选列表显示时保留翻页；空闲时转全角 */
+    case VK_OEM_MINUS:
+        if (g_nitems > 0)
+            return 0;
+        return shift ? 0xFF3F : 0xFF0D; /* ＿ － */
+    case VK_OEM_PLUS:
+        if (g_nitems > 0)
+            return 0;
+        return shift ? 0xFF0B : 0xFF1D; /* ＋ ＝ */
+
+    default:
+        return 0;
     }
 }
-
 static int handle_key(UINT vk, int down)
 {
     int shift = kv_down(VK_SHIFT);
