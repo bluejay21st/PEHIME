@@ -1,0 +1,14 @@
+# 构建产物和临时文件
+/build/
+/dist/
+/.tmp/
+*.log
+*.tmp
+
+# 编译器，可以自动下载
+/tools/w64devkit/
+/tools/w64devkit-*.7z.exe
+
+# Python 缓存
+__pycache__/
+*.pyc

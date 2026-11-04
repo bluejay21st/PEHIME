@@ -1,0 +1,576 @@
+# PEIM 领域/常用词表：每行一个 2 或 3 字词；如需指定拼音，空格后再写（音节用 ' 分隔）
+# ---- 三字词（常用 + PE 领域） ----
+计算机 ji'suan'ji
+输入法 shu'ru'fa
+显示器 xian'shi'qi
+打印机 da'yin'ji
+扫描仪 sao'miao'yi
+摄像头 she'xiang'tou
+麦克风 mai'ke'feng
+内存条 nei'cun'tiao
+硬盘盒 ying'pan'he
+散热器 san're'qi
+路由器 lu'you'qi
+交换机 jiao'huan'ji
+文件夹 wen'jian'jia
+剪贴板 jian'tie'ban
+任务栏 ren'wu'lan
+分区表 fen'qu'biao
+引导区 yin'dao'qu
+启动项 qi'dong'xiang
+服务项 fu'wu'xiang
+注册表 zhu'ce'biao
+组策略 zu'ce'lue
+记事本 ji'shi'ben
+写字板 xie'zi'ban
+计算器 ji'suan'qi
+系统盘 xi'tong'pan
+启动盘 qi'dong'pan
+安装盘 an'zhuang'pan
+管理员 guan'li'yuan
+防火墙 fang'huo'qiang
+快捷键 kuai'jie'jian
+输入框 shu'ru'kuang
+驱动器 qu'dong'qi
+连接线 lian'jie'xian
+数据线 shu'ju'xian
+电源线 dian'yuan'xian
+显示屏 xian'shi'ping
+数据库 shu'ju'ku
+局域网 ju'yu'wang
+互联网 hu'lian'wang
+万维网 wan'wei'wang
+程序员 cheng'xu'yuan
+命令行 ming'ling'xing
+批处理 pi'chu'li
+格式化 ge'shi'hua
+虚拟机 xu'ni'ji
+模拟器 mo'ni'qi
+压缩包 ya'suo'bao
+安装包 an'zhuang'bao
+工作站 gong'zuo'zhan
+服务器 fu'wu'qi
+客户端 ke'hu'duan
+浏览器 liu'lan'qi
+为什么 wei'shen'me
+怎么办 zen'me'ban
+怎么样 zen'me'yang
+对不起 dui'bu'qi
+没关系 mei'guan'xi
+差不多 cha'bu'duo
+有时候 you'shi'hou
+大家好 da'jia'hao
+早上好 zao'shang'hao
+晚上好 wan'shang'hao
+新年好 xin'nian'hao
+谢谢你 xie'xie'ni
+谢谢您 xie'xie'nin
+不用谢 bu'yong'xie
+不客气 bu'ke'qi
+别客气 bie'ke'qi
+你好吗 ni'hao'ma
+没问题 mei'wen'ti
+有问题 you'wen'ti
+不知道 bu'zhi'dao
+明白了 ming'bai'le
+可能吧 ke'neng'ba
+真的吗 zhen'de'ma
+太好了 tai'hao'le
+一起来 yi'qi'lai
+出去玩 chu'qu'wan
+系统
+磁盘
+分区
+硬盘
+固态
+内存
+主板
+电源
+网卡
+显卡
+声卡
+驱动
+固件
+引导
+启动
+镜像
+备份
+还原
+恢复
+克隆
+部署
+安装
+卸载
+修复
+更新
+补丁
+激活
+授权
+注册
+重置
+挂载
+加载
+盘符
+卷标
+格式化
+修复
+目录
+路径
+文件
+文件夹
+属性
+权限
+管理员
+用户
+账户
+密码
+登录
+注销
+重启
+关机
+睡眠
+休眠
+命令
+提示符
+注册表
+服务
+进程
+任务
+管理器
+设备
+硬件
+软件
+计算
+计算机
+记事本
+浏览器
+资源
+网络
+无线
+有线
+连接
+互联网
+局域网
+共享
+打印机
+显示
+分辨率
+桌面
+开始
+菜单
+任务栏
+通知
+输入法
+键盘
+鼠标
+触摸板
+屏幕
+截图
+剪贴板
+回收站
+控制
+面板
+设置
+高级
+选项
+默认
+确定
+取消
+应用
+关闭
+打开
+保存
+另存
+新建
+删除
+重命名
+复制
+剪切
+粘贴
+全选
+查找
+替换
+打印
+帮助
+关于
+版本
+型号
+序列
+序列号
+许可
+协议
+安装包
+速度
+温度
+健康
+检测
+扫描
+清理
+优化
+加速
+测速
+测盘
+坏道
+数据
+数据库
+日志
+报告
+结果
+测试
+检查
+分析
+统计
+错误
+成功
+失败
+警告
+提示
+信息
+内容
+标题
+名称
+类型
+大小
+修改
+创建
+访问
+位置
+时间
+日期
+今天
+明天
+昨天
+现在
+姓名
+名字
+地址
+电话
+邮箱
+公司
+部门
+职位
+备注
+说明
+你好
+谢谢
+再见
+抱歉
+请问
+可以
+我们
+你们
+他们
+这个
+那个
+什么
+为什么
+怎么
+多少
+是否
+没有
+已经
+正在
+需要
+应该
+可能
+一定
+非常
+比较
+特别
+主要
+重要
+安全
+稳定
+兼容
+性能
+升级
+降级
+回滚
+保留
+确认
+执行
+完成
+结束
+继续
+暂停
+停止
+返回
+退出
+中文
+拼音
+简体
+繁体
+输入
+输出
+选择
+切换
+上屏
+候选
+翻页
+空格
+回车
+主分区
+活动分区
+隐藏分区
+系统盘
+启动盘
+数据盘
+移动盘
+优盘
+光盘
+刻录
+分区表
+引导区
+系统安装
+磁盘管理
+数据恢复
+引导修复
+密码修改
+密码重置
+扩展分区
+逻辑分区
+启动项
+引导项
+磁盘分区
+镜像文件
+系统镜像
+系统还原
+系统备份
+系统修复
+系统更新
+系统安装
+系统部署
+硬盘分区
+磁盘检测
+磁盘扫描
+磁盘修复
+磁盘清理
+磁盘优化
+磁盘克隆
+磁盘备份
+磁盘数据
+文件恢复
+文件备份
+文件复制
+文件删除
+文件属性
+文件权限
+文件路径
+文件大小
+文件类型
+文件名称
+文件内容
+文件搜索
+文件夹
+用户名
+用户账户
+用户密码
+管理员权限
+系统密码
+登录密码
+开机密码
+引导修复
+启动修复
+启动菜单
+系统引导
+磁盘引导
+硬盘引导
+分区引导
+引导分区
+启动分区
+系统分区
+数据分区
+备份分区
+恢复分区
+镜像还原
+镜像备份
+镜像恢复
+镜像安装
+镜像部署
+驱动安装
+驱动更新
+驱动备份
+驱动恢复
+网卡驱动
+显卡驱动
+声卡驱动
+主板驱动
+我是
+是吧
+不在
+这个
+那个
+# ---- 三字/四字扩充（常用 + PE 领域，带显式拼音） ----
+主分区 zhu'fen'qu
+数据盘 shu'ju'pan
+工具盘 gong'ju'pan
+引导项 yin'dao'xiang
+控制台 kong'zhi'tai
+台式机 tai'shi'ji
+笔记本 bi'ji'ben
+磁盘管理 ci'pan'guan'li
+分区工具 fen'qu'gong'ju
+分区助手 fen'qu'zhu'shou
+磁盘工具 ci'pan'gong'ju
+磁盘分区 ci'pan'fen'qu
+无损分区 wu'sun'fen'qu
+分区容量 fen'qu'rong'liang
+磁盘空间 ci'pan'kong'jian
+剩余空间 sheng'yu'kong'jian
+可用空间 ke'yong'kong'jian
+磁盘清理 ci'pan'qing'li
+磁盘碎片 ci'pan'sui'pian
+磁盘错误 ci'pan'cuo'wu
+磁盘检测 ci'pan'jian'ce
+检查磁盘 jian'cha'ci'pan
+扫描磁盘 sao'miao'ci'pan
+修复磁盘 xiu'fu'ci'pan
+数据恢复 shu'ju'hui'fu
+恢复数据 hui'fu'shu'ju
+文件恢复 wen'jian'hui'fu
+数据备份 shu'ju'bei'fen
+数据丢失 shu'ju'diu'shi
+文件损坏 wen'jian'sun'huai
+系统备份 xi'tong'bei'fen
+系统还原 xi'tong'huan'yuan
+系统镜像 xi'tong'jing'xiang
+系统修复 xi'tong'xiu'fu
+系统文件 xi'tong'wen'jian
+系统信息 xi'tong'xin'xi
+系统属性 xi'tong'shu'xing
+系统更新 xi'tong'geng'xin
+系统托盘 xi'tong'tuo'pan
+光盘镜像 guang'pan'jing'xiang
+镜像文件 jing'xiang'wen'jian
+镜像工具 jing'xiang'gong'ju
+虚拟光驱 xu'ni'guang'qu
+移动硬盘 yi'dong'ying'pan
+固态硬盘 gu'tai'ying'pan
+机械硬盘 ji'xie'ying'pan
+硬盘检测 ying'pan'jian'ce
+硬盘分区 ying'pan'fen'qu
+内存检测 nei'cun'jian'ce
+内存不足 nei'cun'bu'zu
+性能测试 xing'neng'ce'shi
+温度检测 wen'du'jian'ce
+电源管理 dian'yuan'guan'li
+电源选项 dian'yuan'xuan'xiang
+设备驱动 she'bei'qu'dong
+驱动程序 qu'dong'cheng'xu
+主板驱动 zhu'ban'qu'dong
+显卡驱动 xian'ka'qu'dong
+声卡驱动 sheng'ka'qu'dong
+网卡驱动 wang'ka'qu'dong
+磁盘驱动 ci'pan'qu'dong
+网络连接 wang'luo'lian'jie
+网络设置 wang'luo'she'zhi
+无线网络 wu'xian'wang'luo
+有线网络 you'xian'wang'luo
+子网掩码 zi'wang'yan'ma
+默认网关 mo'ren'wang'guan
+域名解析 yu'ming'jie'xi
+网络诊断 wang'luo'zhen'duan
+网络共享 wang'luo'gong'xiang
+文件共享 wen'jian'gong'xiang
+杀毒软件 sha'du'ruan'jian
+压缩软件 ya'suo'ruan'jian
+解压软件 jie'ya'ruan'jian
+压缩解压 ya'suo'jie'ya
+文件压缩 wen'jian'ya'suo
+文件解压 wen'jian'jie'ya
+备份还原 bei'fen'huan'yuan
+安全模式 an'quan'mo'shi
+安全中心 an'quan'zhong'xin
+文件系统 wen'jian'xi'tong
+启动菜单 qi'dong'cai'dan
+启动引导 qi'dong'yin'dao
+引导修复 yin'dao'xiu'fu
+启动修复 qi'dong'xiu'fu
+引导分区 yin'dao'fen'qu
+引导扇区 yin'dao'shan'qu
+引导失败 yin'dao'shi'bai
+启动失败 qi'dong'shi'bai
+无法启动 wu'fa'qi'dong
+蓝屏代码 lan'ping'dai'ma
+远程桌面 yuan'cheng'zhuo'mian
+控制面板 kong'zhi'mian'ban
+任务计划 ren'wu'ji'hua
+开始菜单 kai'shi'cai'dan
+通知区域 tong'zhi'qu'yu
+桌面背景 zhuo'mian'bei'jing
+屏幕保护 ping'mu'bao'hu
+显示设置 xian'shi'she'zhi
+声音设置 sheng'yin'she'zhi
+应用商店 ying'yong'shang'dian
+默认程序 mo'ren'cheng'xu
+文件关联 wen'jian'guan'lian
+打开方式 da'kai'fang'shi
+快捷方式 kuai'jie'fang'shi
+右键菜单 you'jian'cai'dan
+计算机名 ji'suan'ji'ming
+用户账户 yong'hu'zhang'hu
+本地用户 ben'di'yong'hu
+用户管理 yong'hu'guan'li
+管理权限 guan'li'quan'xian
+台式电脑 tai'shi'dian'nao
+复制粘贴 fu'zhi'nian'tie
+打开文件 da'kai'wen'jian
+保存文件 bao'cun'wen'jian
+关闭窗口 guan'bi'chuang'kou
+文件管理 wen'jian'guan'li
+文件浏览 wen'jian'liu'lan
+文件路径 wen'jian'lu'jing
+绝对路径 jue'dui'lu'jing
+相对路径 xiang'dui'lu'jing
+自动更新 zi'dong'geng'xin
+自动播放 zi'dong'bo'fang
+临时文件 lin'shi'wen'jian
+垃圾文件 la'ji'wen'jian
+只读属性 zhi'du'shu'xing
+隐藏属性 yin'cang'shu'xing
+修改时间 xiu'gai'shi'jian
+创建时间 chuang'jian'shi'jian
+访问时间 fang'wen'shi'jian
+文件大小 wen'jian'da'xiao
+剩余时间 sheng'yu'shi'jian
+已用空间 yi'yong'kong'jian
+一般来说 yi'ban'lai'shuo
+无论如何 wu'lun'ru'he
+心想事成 xin'xiang'shi'cheng
+万事如意 wan'shi'ru'yi
+一切顺利 yi'qie'shun'li
+工作顺利 gong'zuo'shun'li
+身体健康 shen'ti'jian'kang
+生日快乐 sheng'ri'kuai'le
+新年快乐 xin'nian'kuai'le
+恭喜发财 gong'xi'fa'cai
+一路平安 yi'lu'ping'an
+注意安全 zhu'yi'an'quan
+谢谢合作 xie'xie'he'zuo
+欢迎使用 huan'ying'shi'yong
+正在加载 zheng'zai'jia'zai
+操作成功 cao'zuo'cheng'gong
+操作失败 cao'zuo'shi'bai
+是否继续 shi'fou'ji'xu
+第一时间 di'yi'shi'jian
+乱七八糟 luan'qi'ba'zao
+莫名其妙 mo'ming'qi'miao
+不可思议 bu'ke'si'yi
+各种各样 ge'zhong'ge'yang
+越来越多 yue'lai'yue'duo
+越来越少 yue'lai'yue'shao
+一举两得 yi'ju'liang'de
+实事求是 shi'shi'qiu'shi
+精益求精 jing'yi'qiu'jing
+一丝不苟 yi'si'bu'gou
+持之以恒 chi'zhi'yi'heng
+全力以赴 quan'li'yi'fu
+名副其实 ming'fu'qi'shi
+名列前茅 ming'lie'qian'mao
+四面八方 si'mian'ba'fang
+五颜六色 wu'yan'liu'se
+十全十美 shi'quan'shi'mei
+万无一失 wan'wu'yi'shi
+程序 cheng'xu
+你好 ni'hao
+词库 ci'ku
