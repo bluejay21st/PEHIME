@@ -1018,57 +1018,70 @@ static int is_letter_vk(UINT vk)
     return vk >= 'A' && vk <= 'Z';
 }
 
-/* 中文模式固定标点映射：0=不转换（英文符号原样放行） */
-static WCHAR cn_punct_for_key(UINT vk, int shift)
+/* 中文模式固定标点映射：返回要注入的字符串；NULL=不转换（英文符号原样放行） */
+static const WCHAR *cn_punct_for_key(UINT vk, int shift, int *out_len)
 {
+    *out_len = 1;
     switch (vk) {
-    /* 主键盘数字行（Shift） */
-    case '1':           return shift ? 0xFF01 : 0; /* ！ */
-    case '2':           return shift ? 0xFF20 : 0; /* ＠ */
-    case '3':           return shift ? 0xFF03 : 0; /* ＃ */
-    case '4':           return shift ? 0xFFE5 : 0; /* ￥ */
-    case '5':           return shift ? 0xFF05 : 0; /* ％ */
-    case '6':           return shift ? 0xFF3E : 0; /* ＾ */
-    case '7':           return shift ? 0xFF06 : 0; /* ＆ */
-    case '8':           return shift ? 0xFF0A : 0; /* ＊ */
-    case '9':           return shift ? 0xFF08 : 0; /* （ */
-    case '0':           return shift ? 0xFF09 : 0; /* ） */
+    /* 数字行：只转换这几个，其余保持英文符号 */
+    case '1':
+        if (shift) return L"\xFF01"; /* ！ */
+        break;
+    case '4':
+        if (shift) return L"\xFFE5"; /* ￥ */
+        break;
+    case '6':
+        if (shift) { *out_len = 2; return L"\x2026\x2026"; } /* …… */
+        break;
+    case '9':
+        if (shift) return L"\xFF08"; /* （ */
+        break;
+    case '0':
+        if (shift) return L"\xFF09"; /* ） */
+        break;
 
     /* 标点键 */
-    case VK_OEM_COMMA:  return shift ? 0x300A : 0xFF0C; /* 《 ， */
-    case VK_OEM_PERIOD: return shift ? 0x300B : 0x3002; /* 》 。 */
-    case VK_OEM_1:      return shift ? 0xFF1A : 0xFF1B; /* ： ； */
-    case VK_OEM_2:      return shift ? 0xFF1F : 0xFF0F; /* ？ ／ */
-    case VK_OEM_3:      return shift ? 0xFF5E : 0xFF40; /* ～ ｀ */
-    case VK_OEM_4:      return shift ? 0xFF5B : 0x3010; /* ｛ 【 */
-    case VK_OEM_5:      return shift ? 0xFF5C : 0x3001; /* ｜ 、 */
-    case VK_OEM_6:      return shift ? 0xFF5D : 0x3011; /* ｝ 】 */
+    case VK_OEM_COMMA:  return shift ? L"\x300A" : L"\xFF0C"; /* 《 ， */
+    case VK_OEM_PERIOD: return shift ? L"\x300B" : L"\x3002"; /* 》 。 */
+    case VK_OEM_1:      return shift ? L"\xFF1A" : L"\xFF1B"; /* ： ； */
+    case VK_OEM_2:
+        if (shift) return L"\xFF1F"; /* ？ */
+        break;                       /* / 原样 */
+    case VK_OEM_3:
+        if (!shift) return L"\x00B7"; /* · */
+        break;                        /* ~ 原样 */
+    case VK_OEM_4:
+        if (!shift) return L"\x3010"; /* 【 */
+        break;                        /* { 原样 */
+    case VK_OEM_5:
+        if (!shift) return L"\x3001"; /* 、 */
+        break;                        /* | 原样 */
+    case VK_OEM_6:
+        if (!shift) return L"\x3011"; /* 】 */
+        break;                        /* } 原样 */
+    case VK_OEM_MINUS:
+        if (g_nitems > 0)
+            break;                     /* 候选列表时 - 用于上一页 */
+        if (shift) { *out_len = 2; return L"\x2014\x2014"; } /* —— */
+        break;                         /* - 原样 */
 
     /* 引号成对切换 */
     case VK_OEM_7:
         if (shift) {
-            WCHAR q = g_quote_double ? 0x201D : 0x201C; /* ” “ */
+            const WCHAR *q = g_quote_double ? L"\x201D" : L"\x201C"; /* ” “ */
             g_quote_double = !g_quote_double;
             return q;
         } else {
-            WCHAR q = g_quote_single ? 0x2019 : 0x2018; /* ’ ‘ */
+            const WCHAR *q = g_quote_single ? L"\x2019" : L"\x2018"; /* ’ ‘ */
             g_quote_single = !g_quote_single;
             return q;
         }
 
-    /* - / = 在候选列表显示时保留翻页；空闲时转全角 */
-    case VK_OEM_MINUS:
-        if (g_nitems > 0)
-            return 0;
-        return shift ? 0xFF3F : 0xFF0D; /* ＿ － */
-    case VK_OEM_PLUS:
-        if (g_nitems > 0)
-            return 0;
-        return shift ? 0xFF0B : 0xFF1D; /* ＋ ＝ */
-
     default:
-        return 0;
+        break;
     }
+    *out_len = 0;
+    return NULL;
 }
 static int handle_key(UINT vk, int down)
 {
@@ -1106,17 +1119,18 @@ static int handle_key(UINT vk, int down)
     {
         if (g_cfg.log_verbose && vk >= '0' && vk <= '9')
             peim_log("digit vk=%lu shift=%d cn=%d", (unsigned long)vk, shift, g_cn);
-        WCHAR punct = cn_punct_for_key(vk, shift);
-        if (punct) {
+        int plen = 0;
+        const WCHAR *punct = cn_punct_for_key(vk, shift, &plen);
+        if (punct && plen > 0) {
             if (vk >= '0' && vk <= '9')
-                peim_log("digit punct vk=%lu shift=%d -> U+%04X",
-                         (unsigned long)vk, shift, (unsigned)punct);
+                peim_log("digit punct vk=%lu shift=%d len=%d first=U+%04X",
+                         (unsigned long)vk, shift, plen, (unsigned)punct[0]);
             if (g_typed_len > 0)
                 commit_composition_for_punct();
-            queue_inject(&punct, 1);
+            queue_inject(punct, plen);
             hide_window();
             if (g_cfg.log_verbose)
-                peim_log("punct U+%04X", (unsigned)punct);
+                peim_log("punct len=%d first=U+%04X", plen, (unsigned)punct[0]);
             return 1;
         }
     }
