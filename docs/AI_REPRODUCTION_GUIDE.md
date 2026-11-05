@@ -1,6 +1,6 @@
 # PEHIME AI 复现指南（实现规格与验收）
 
-版本标识：**v0.2**（当前发布版本）
+版本标识：**v0.2.1**（当前发布版本）
 项目：PEHIME —— WinPE 用的极简全拼中文输入法
 
 > 本文是**实现契约**：按本文从零实现，应能通过第 10 节验收矩阵。
@@ -65,8 +65,8 @@ pehime.ini      配置（可缺省）
 | `src/common/pehime_config.{c,h}` | `pehime.ini` 读取与默认配置生成 |
 | `src/common/pehime_log.{c,h}` | `PEHIME.log` 写入与轮转 |
 | `tools/words/cn_words_curated.txt` | 中文领域补充词（最高优先级） |
-| `tools/words2dict.py` | 生成 `build/pehime.dict` 与 `build/pehime_cn_dump.txt`；头部 `CN_WORD_FILES` 列源文件 |
-| `tools/ptest.c` | 拼音核心命令行测试（开发用） |
+| `tools/words2dict.py` | 生成 `.tmp/pehime.dict` 与 `.tmp/pehime_cn_dump.txt`；头部 `CN_WORD_FILES` 列源文件 |
+| `tools/ptest.c` | 拼音核心命令行测试（开发用；调试输出写到 `.tmp/ptest_out.txt`） |
 | `tools/licenses/` | 第三方许可全文 |
 | `build_words.cmd` | 词库构建（项目根目录）：生成中文词库并复制到 `build\x64\`、`build\x86\` |
 | `build_x64.cmd` | x64 构建（项目根目录；产物 `build\x64\PEHIME.EXE`、`build\x64\ptest.exe`） |
@@ -86,8 +86,10 @@ build\x64\pehime.dict     中文词库副本
 build\x86\PEHIME.EXE      x86 主程序
 build\x86\ptest.exe       x86 拼音核心测试
 build\x86\pehime.dict     中文词库副本
-build\pehime_cn_dump.txt  词库可读导出（调试用）
 ```
+
+临时文件统一放在 `.tmp\`（词库调试导出 `.tmp\pehime_cn_dump.txt`、ptest 输出 `.tmp\ptest_out.txt` 等），
+该目录已被 `.gitignore` 忽略。
 
 ## 4. 功能需求（FR）
 
@@ -334,7 +336,8 @@ u32  entry_count
 `build_words.cmd`。两个可执行文件构建脚本只写自己的架构目录，互不覆盖对方产物。
 
 工具链：仓库不直接携带编译器；`build_x64.cmd` / `build_x86.cmd` 发现编译器不存在时，
-会自动调用 `tools\get_w64devkit.ps1` 下载 w64devkit 2.11.0（GCC 16.2.0）。w64devkit 同时提供
+会自动调用 `tools\get_w64devkit.ps1` 下载 w64devkit 2.11.0（GCC 16.2.0），并保留在
+`tools\w64devkit\`（该目录已被 `.gitignore` 忽略，不会上传）。w64devkit 同时提供
 `x86_64-w64-mingw32-gcc` 与 `i686-w64-mingw32-gcc`。也可以先手动运行：
 
 ```cmd
@@ -352,9 +355,10 @@ python -m pip install jieba pypinyin wordfreq
 ```
 
 脚本还会检查 `jieba`、`pypinyin`、`wordfreq` 三个导入；缺失时提示"按任意键安装"，自动执行
-`python -m pip install jieba pypinyin wordfreq` 后复查。随后运行 `tools\words2dict.py`，把
-`build\pehime.dict` 复制到 `build\x64\` 与 `build\x86\`（目录不存在则创建），复制完成后删除根目录的
-`build\pehime.dict`；`build\pehime_cn_dump.txt` 作为调试导出保留。
+`python -m pip install jieba pypinyin wordfreq` 后复查。随后运行 `tools\words2dict.py`，在
+`.tmp\` 生成 `pehime.dict` 与 `pehime_cn_dump.txt`，把 `.tmp\pehime.dict` 复制到 `build\x64\` 与
+`build\x86\`（目录不存在则创建），复制完成后删除 `.tmp\pehime.dict`；`.tmp\pehime_cn_dump.txt`
+作为调试导出保留。`.tmp\` 已在 `.gitignore` 中忽略。
 
 ```cmd
 rem 生成词库 → 复制到 build\x64\pehime.dict、build\x86\pehime.dict
@@ -403,7 +407,7 @@ build\x86\PEHIME.EXE --selftest
 | 22 | 删除 `pehime.dict` 后启动 | 不崩溃，可原文直输（`log=1` 时日志有错误） |
 | 23 | `PEHIME.EXE --selftest` | 退出码 0（`log=1` 时日志 `SELFTEST: OK`；不装钩子、不弹窗、不提权） |
 | 24 | 连续快速输入 20+ 字母 | 不丢键、不卡、不重复上屏 |
-| 25 | 运行 `build_words.cmd` | 生成 `build\pehime.dict` 与 `build\pehime_cn_dump.txt`；词库被复制到 `build\x64\`、`build\x86\`，根目录的 `build\pehime.dict` 复制后删除，`build\pehime_cn_dump.txt` 保留 |
+| 25 | 运行 `build_words.cmd` | 在 `.tmp\` 生成 `pehime.dict` 与 `pehime_cn_dump.txt`；词库被复制到 `build\x64\`、`build\x86\`，`.tmp\pehime.dict` 复制后删除，`.tmp\pehime_cn_dump.txt` 保留 |
 | 26 | 运行 `build_x64.cmd` | 产出 `build\x64\PEHIME.EXE`、`build\x64\ptest.exe`；不生成、不复制词库 |
 | 27 | 运行 `build_x86.cmd` | 产出 `build\x86\PEHIME.EXE`、`build\x86\ptest.exe`；不生成、不复制词库 |
 | 28 | `build\x64\ptest.exe build\x64\pehime.dict zhongguo nihao` 与 `build\x64\PEHIME.EXE --selftest` | 候选/上屏正常，自检退出码 0 |
@@ -421,7 +425,7 @@ build\x86\PEHIME.EXE --selftest
 - 管理员窗口（UIPI）：本程序已整体以管理员运行，因此可向管理员窗口注入；部分自绘控件（Qt/Electron）可能无效。
 - 英文态只做原样直通，不提供单词联想/补全。
 - 中文态有候选时，Shift+数字中未映射中文标点的组合（`2`/`3`/`5`/`7`/`8`）会用于选词，
-  不输出对应英文符号（历史行为，v0.2 未改动）。
+  不输出对应英文符号（历史行为，本版未改动）。
 - 长句为"音节切分 + 整词优先"，不是完整语言模型；极端歧义拼音可能不是最理想切分。
 - 与系统自带输入法共存时，Shift 可能同时切换两边。
 - 托盘图标在 Explorer 重启后不会自动恢复（重启输入法即可）。
@@ -431,7 +435,8 @@ build\x86\PEHIME.EXE --selftest
 - 运行时 EXE 只依赖 Windows 系统 DLL，不链接第三方库（仅静态链接 MinGW-w64 启动代码）。
 - 词库生成使用：jieba（MIT）、pypinyin（MIT）、wordfreq（Apache-2.0）、
   w64devkit（宽松许可，构建前由脚本下载）。
-- 许可全文在 `tools/licenses/`；分发词库数据时请保留该目录。
+- 第三方许可全文在仓库 `tools/licenses/`；PEHIME 发布包只包含项目自身的 LICENSE，
+  不包含第三方组件/词源许可文本。
 
 ## 13. 从零重建的推荐顺序
 

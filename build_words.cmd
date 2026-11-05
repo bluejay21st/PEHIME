@@ -6,13 +6,13 @@ rem Steps:
 rem   1) check Python 3.8+ (missing -> error, wait for key, exit)
 rem   2) check jieba / pypinyin / wordfreq; if missing, prompt and
 rem      install them with pip
-rem   3) run tools\words2dict.py
-rem   4) copy build\pehime.dict into build\x64\ and build\x86\
+rem   3) run tools\words2dict.py (outputs under .tmp\)
+rem   4) copy .tmp\pehime.dict into build\x64\ and build\x86\
 rem
 rem Output layout:
 rem   build\x64\pehime.dict
 rem   build\x86\pehime.dict
-rem   build\pehime_cn_dump.txt  (debug dump, not needed at runtime)
+rem   .tmp\pehime_cn_dump.txt   (debug dump, not needed at runtime)
 rem ===================================================================
 setlocal
 cd /d "%~dp0"
@@ -45,21 +45,21 @@ rem ---------- 3) dictionary ----------
 echo [1/2] build dictionary with tools\words2dict.py
 python "%~dp0tools\words2dict.py"
 if errorlevel 1 goto words_failed
-if not exist "build\pehime.dict" goto dict_missing
+if not exist ".tmp\pehime.dict" goto dict_missing
 
 rem ---------- 4) copy to architecture directories ----------
 echo [2/2] copy dictionary to build\x64 and build\x86
-copy /y "build\pehime.dict" "build\x64\pehime.dict" >nul
+copy /y ".tmp\pehime.dict" "build\x64\pehime.dict" >nul
 if errorlevel 1 goto copy_x64_failed
-copy /y "build\pehime.dict" "build\x86\pehime.dict" >nul
+copy /y ".tmp\pehime.dict" "build\x86\pehime.dict" >nul
 if errorlevel 1 goto copy_x86_failed
-del /q "build\pehime.dict" >nul 2>nul
+del /q ".tmp\pehime.dict" >nul 2>nul
 
 echo.
 echo BUILD WORDS OK
 echo   build\x64\pehime.dict
 echo   build\x86\pehime.dict
-echo   build\pehime_cn_dump.txt  ^(debug only^)
+echo   .tmp\pehime_cn_dump.txt  ^(debug only^)
 exit /b 0
 
 rem ---------- error paths ----------
@@ -88,7 +88,7 @@ pause
 exit /b 1
 
 :dict_missing
-echo [ERROR] build\pehime.dict was not generated.
+echo [ERROR] .tmp\pehime.dict was not generated.
 pause
 exit /b 1
 

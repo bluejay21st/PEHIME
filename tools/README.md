@@ -13,7 +13,8 @@ powershell -ExecutionPolicy Bypass -File tools\get_w64devkit.ps1
 - 版本：**w64devkit 2.11.0**（内含 GCC 16.2.0 / MinGW-w64，可交叉编译 x64 与 x86 目标）
 - 下载地址：<https://github.com/skeeto/w64devkit/releases/download/v2.11.0/w64devkit-x64-2.11.0.7z.exe>
 - SHA256：`54c2bb9962e8a30c8270e34c5efc3d5fee579f53087fa7d435b95fbba2af7b2b`
-- 解压位置：`tools\w64devkit\w64devkit\`（脚本会自动创建）
+- 解压位置：`tools\w64devkit\w64devkit\`（脚本会自动创建；编译完成后保留，不删除）
+- 该目录与下载包已在根目录 `.gitignore` 中忽略，不会上传到 GitHub
 - 校验：脚本会校验 SHA256，并检查 `bin\x86_64-w64-mingw32-gcc.exe` 是否可运行
 - 32 位构建：`build_x86.cmd` 使用同一目录下的 `bin\i686-w64-mingw32-gcc.exe`，缺少时同样会触发自动下载
 
@@ -38,10 +39,10 @@ MinGW-w64 运行时代码的许可见 `w64devkit` 目录内的 `COPYING.MinGW-w6
 CN_WORD_FILES = ["tools/words/cn_words_curated.txt"]
 ```
 
-根目录的 `build_words.cmd` 每次都会重新生成中文词库：运行 `tools/words2dict.py` 得到
-`build\pehime.dict` 与 `build\pehime_cn_dump.txt`，随后把 `build\pehime.dict` 复制到
-`build\x64\` 与 `build\x86\`（目录不存在则创建），复制后删除根目录的 `build\pehime.dict`；
-`build\pehime_cn_dump.txt` 作为可读导出保留，供调试用。
+根目录的 `build_words.cmd` 每次都会重新生成中文词库：运行 `tools/words2dict.py` 在 `.tmp\`
+生成 `pehime.dict` 与 `pehime_cn_dump.txt`，随后把 `.tmp\pehime.dict` 复制到
+`build\x64\` 与 `build\x86\`（目录不存在则创建），复制后删除 `.tmp\pehime.dict`；
+`.tmp\pehime_cn_dump.txt` 作为可读导出保留（`.tmp\` 已在 `.gitignore` 中忽略，供调试用）。
 
 `build_words.cmd` 会检查 Python 3.8+，并检查 `jieba`、`pypinyin`、`wordfreq` 三个导入；
 缺少依赖时提示「按任意键安装」，自动执行下面的命令后复查：
@@ -57,8 +58,8 @@ python -m pip install jieba pypinyin wordfreq
 
 | 文件 | 用途 |
 |---|---|
-| `words2dict.py` | 生成 `build/pehime.dict` 和 `build/pehime_cn_dump.txt` |
-| `ptest.c` | 拼音核心命令行测试（构建时编为 `build/x64/ptest.exe`，32 位为 `build/x86/ptest.exe`） |
+| `words2dict.py` | 生成 `.tmp/pehime.dict` 和 `.tmp/pehime_cn_dump.txt` |
+| `ptest.c` | 拼音核心命令行测试（构建时编为 `build/x64/ptest.exe`，32 位为 `build/x86/ptest.exe`；调试输出 `.tmp/ptest_out.txt`） |
 | `licenses/` | 词库数据/工具涉及的第三方许可全文 |
 
 ## 开源项目与地址

@@ -1,5 +1,5 @@
 /*
- * hook_main.c —— PEHIME 钩子版输入法（面向 WinPE）v0.2
+ * hook_main.c —— PEHIME 钩子版输入法（面向 WinPE）v0.2.1
  *
  * 原理：WH_KEYBOARD_LL 全局键盘钩子拦截按键 → 组字/候选窗 → SendInput
  *       (KEYEVENTF_UNICODE) 把字符注入前台窗口。
@@ -32,7 +32,7 @@
 #include "pehime_candwin.h"
 #include "pehime_tray.h"
 
-#define PEHIME_HOOK_VERSION L"0.2"
+#define PEHIME_HOOK_VERSION L"0.2.1"
 #define PEHIME_MUTEX_NAME   L"PEHIME_HOOK_SINGLE_INSTANCE"
 #define WM_PEHIME_INJECT    (WM_APP + 1)
 #define PEHIME_PENDING_MAX  64

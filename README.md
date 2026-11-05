@@ -1,6 +1,6 @@
 # PEHIME —— WinPE 极简中文输入法
 
-版本：v0.2
+版本：v0.2.1
 
 ## 核心功能
 
@@ -14,9 +14,9 @@
 ## 设计
 
 - WinPE 不加载第三方 IMM32/TSF 输入法，因此用 `WH_KEYBOARD_LL` 全局键盘钩子拦截按键，
-  文本经队列用 `SendInput` 注入 Unicode；纯 C99、单线程、静态链接
-- 不写注册表、不装驱动/服务，复制文件即可运行，删除文件即卸载
-- 纯 C99、单线程；词库与架构无关，x64/x86 共用同一份 `pehime.dict`
+  文本经队列用 `SendInput` 注入 Unicode
+- 纯 C99、单线程、静态链接；不写注册表、不装驱动/服务，复制文件即可运行，删除文件即卸载
+- 词库与架构无关，x64/x86 共用同一份 `pehime.dict`
 - 候选窗为自绘 `WS_EX_NOACTIVATE` 弹窗，不抢焦点、不进任务栏、始终置顶
 
 ## 环境
@@ -46,12 +46,13 @@ build_x86.cmd
 
 - `build_words.cmd`：检查 Python 3.8+（缺失或版本过低则报错、等待按键后退出）和 `jieba`/`pypinyin`/`wordfreq`，
   缺少依赖时提示按任意键执行 `python -m pip install jieba pypinyin wordfreq` 并复查；
-  运行 `tools\words2dict.py` 生成 `build\pehime.dict`（`build\pehime_cn_dump.txt` 留作调试），
-  再把词库复制到 `build\x64\`、`build\x86\`，复制后删除根目录的 `build\pehime.dict`
+  运行 `tools\words2dict.py` 在 `.tmp\` 生成 `pehime.dict`（调试导出 `.tmp\pehime_cn_dump.txt`），
+  再把词库复制到 `build\x64\`、`build\x86\`，复制后删除 `.tmp\pehime.dict`
 - `build_x64.cmd` / `build_x86.cmd`：只编译本架构的 `PEHIME.EXE` 与 `ptest.exe`，
-  不生成也不复制词库；缺少 w64devkit 时自动下载；x86 使用 `i686-w64-mingw32-gcc`
-- 产物布局：`build\x64\`、`build\x86\` 各含 `PEHIME.EXE`、`ptest.exe`、`pehime.dict`，
-  `build\pehime_cn_dump.txt` 为词库调试导出
+  不生成也不复制词库；缺少 w64devkit 时自动下载并保留在 `tools\w64devkit\`
+  （该目录已被 `.gitignore` 忽略）；x86 使用 `i686-w64-mingw32-gcc`
+- 产物布局：`build\x64\`、`build\x86\` 各含 `PEHIME.EXE`、`ptest.exe`、`pehime.dict`
+- 临时文件统一放在 `.tmp\`（词库调试导出、ptest 调试输出等，已被 `.gitignore` 忽略）
 - 测试：
 
 ```cmd

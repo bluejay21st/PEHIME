@@ -5,7 +5,7 @@
  *   ptest <词库文件> [-s N] <拼音串> [<拼音串> ...]
  *   -s N   选中第 N 个候选后，显示上屏结果与剩余输入
  *
- * 输出同时写 stdout 和 build/ptest_out.txt（UTF-8）。
+ * 输出同时写 stdout 和 .tmp/ptest_out.txt（UTF-8）。
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -104,7 +104,8 @@ int main(int argc, char **argv)
     int i;
 
     SetConsoleOutputCP(CP_UTF8);
-    g_log = fopen("build/ptest_out.txt", "w");
+    CreateDirectoryA(".tmp", NULL);
+    g_log = fopen(".tmp/ptest_out.txt", "w");
 
     if (argc < 3) {
         printf("usage: ptest <dict> [-s N] <pinyin> [...]\n");

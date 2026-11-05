@@ -7,8 +7,8 @@ PEHIME 词库生成器（words2dict.py）—— 生成中文词库
   CN_WORD_FILES  中文补充词文件列表（基础词表仍来自 jieba 自带 dict.txt）
 
 产物：
-  build/pehime.dict          中文词库（C 直接读取）
-  build/pehime_cn_dump.txt   中文词库可读导出（调试用）
+  .tmp/pehime.dict          中文词库（C 直接读取；build_words.cmd 复制到 build\x64、build\x86）
+  .tmp/pehime_cn_dump.txt   中文词库可读导出（调试用）
 
 中文数据来源：
   - 单字/词：jieba 自带 dict.txt（MIT）
@@ -41,8 +41,8 @@ CN_WORD_FILES = [
     "tools/words/cn_words_curated.txt",
 ]
 
-CN_DICT = "build/pehime.dict"
-CN_DUMP = "build/pehime_cn_dump.txt"
+CN_DICT = ".tmp/pehime.dict"
+CN_DUMP = ".tmp/pehime_cn_dump.txt"
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CJK_MIN, CJK_MAX = 0x4E00, 0x9FFF
