@@ -68,12 +68,26 @@ pehime.ini      配置（可缺省）
 | `tools/words2dict.py` | 生成 `build/pehime.dict` 与 `build/pehime_cn_dump.txt`；头部 `CN_WORD_FILES` 列源文件 |
 | `tools/ptest.c` | 拼音核心命令行测试（开发用） |
 | `tools/licenses/` | 第三方许可全文 |
-| `build_all.cmd` | x64 一键构建（项目根目录；产物 `build\PEHIME.EXE`、`build\ptest.exe`） |
-| `build_x86.cmd` | 32 位一键构建（`i686-w64-mingw32-gcc`；产物 `build\x86\PEHIME.EXE`、`build\x86\ptest.exe`） |
+| `build_words.cmd` | 词库构建（项目根目录）：生成中文词库并复制到 `build\x64\`、`build\x86\` |
+| `build_x64.cmd` | x64 构建（项目根目录；产物 `build\x64\PEHIME.EXE`、`build\x64\ptest.exe`） |
+| `build_x86.cmd` | x86 构建（`i686-w64-mingw32-gcc`；产物 `build\x86\PEHIME.EXE`、`build\x86\ptest.exe`） |
 | `tools/get_w64devkit.ps1` | 自动下载/解压编译器 |
 | `tools/README.md` | 工具/编译器版本与下载说明 |
 
-运行时词库：`pehime.dict`；源数据：`cn_words_<类别>.txt`；生成脚本：`tools/words2dict.py`（只生成中文词库）。
+运行时词库：`pehime.dict`；源数据：`cn_words_<类别>.txt`；生成脚本：`tools/words2dict.py`（只生成中文词库，
+再由 `build_words.cmd` 复制到 `build\x64\`、`build\x86\`）。
+
+构建产物布局（根目录脚本生成）：
+
+```
+build\x64\PEHIME.EXE      x64 主程序
+build\x64\ptest.exe       x64 拼音核心测试
+build\x64\pehime.dict     中文词库副本
+build\x86\PEHIME.EXE      x86 主程序
+build\x86\ptest.exe       x86 拼音核心测试
+build\x86\pehime.dict     中文词库副本
+build\pehime_cn_dump.txt  词库可读导出（调试用）
+```
 
 ## 4. 功能需求（FR）
 
@@ -304,41 +318,59 @@ u32  entry_count
 - **性能**：单次按键到候选窗刷新为毫秒级（词库 7 万条；无硬性 SLA）。
 - **安全/隐私**：不联网；不读用户文档；不写系统目录/注册表；日志只写自身目录。
 - **可维护性**：C99、单线程、模块边界清晰；关键决策有注释。
-- **可测试性**：拼音核心可脱离 Windows 单测（`build\ptest.exe`，32 位为 `build\x86\ptest.exe`）；程序支持 `--selftest`。
+- **可测试性**：拼音核心可脱离 Windows 单测（`build\x64\ptest.exe` / `build\x86\ptest.exe`）；程序支持 `--selftest`。
 
 ## 9. 构建与测试
 
-工具链：仓库不直接携带编译器；首次构建时如果 `tools\w64devkit` 不存在，
-`build_all.cmd`（以及 `build_x86.cmd`）会自动调用 `tools\get_w64devkit.ps1` 下载
-w64devkit 2.11.0（GCC 16.2.0）。w64devkit 同时提供 `x86_64-w64-mingw32-gcc` 与
-`i686-w64-mingw32-gcc`，分别用于 x64 与 32 位构建。也可以先手动运行：
+构建脚本都在项目根目录，分三步（`build_words.cmd` 先行，两个可执行文件构建脚本互相独立）：
+
+| 脚本 | 作用 | 前提 |
+|---|---|---|
+| `build_words.cmd` | 生成中文词库，复制到 `build\x64\`、`build\x86\` | Python 3.8+ 与 jieba/pypinyin/wordfreq（缺失时脚本提示安装） |
+| `build_x64.cmd` | 编译 x64 的 `PEHIME.EXE`、`ptest.exe` | w64devkit（缺失时自动下载）；不需要 Python |
+| `build_x86.cmd` | 编译 x86 的 `PEHIME.EXE`、`ptest.exe`（`i686-w64-mingw32-gcc`） | 同上 |
+
+词库有变化时先运行 `build_words.cmd`，再运行所需架构的构建脚本；只改代码不换词库时可跳过
+`build_words.cmd`。两个可执行文件构建脚本只写自己的架构目录，互不覆盖对方产物。
+
+工具链：仓库不直接携带编译器；`build_x64.cmd` / `build_x86.cmd` 发现编译器不存在时，
+会自动调用 `tools\get_w64devkit.ps1` 下载 w64devkit 2.11.0（GCC 16.2.0）。w64devkit 同时提供
+`x86_64-w64-mingw32-gcc` 与 `i686-w64-mingw32-gcc`。也可以先手动运行：
 
 ```cmd
 powershell -ExecutionPolicy Bypass -File tools\get_w64devkit.ps1
 ```
 
-编译选项（两种架构相同）：`-O2 -Wall -Wextra -std=c99 -DUNICODE -D_UNICODE -mwindows -static -static-libgcc -s`，
-另有 `-Isrc/...` 与系统库 `-luser32 -lgdi32 -lshell32 -ladvapi32`。
+编译选项：主程序 `-O2 -Wall -Wextra -std=c99 -DUNICODE -D_UNICODE -mwindows -static -static-libgcc -s`，
+ptest 相同但不带 `-mwindows`；另有 `-Isrc/...` 与系统库 `-luser32 -lgdi32 -lshell32 -ladvapi32`。
 
-**生成词库（`build_all.cmd`）需要 Python 3.8+**（构建脚本会检查，没有则直接报错）：
+**生成词库（`build_words.cmd`）需要 Python 3.8+**（脚本会检查版本，缺失则报错、暂停后退出）。
+依赖缺失时脚本会提示并按任意键自动安装；手动安装等价于：
 
 ```cmd
-pip install jieba pypinyin wordfreq
+python -m pip install jieba pypinyin wordfreq
 ```
 
-`jieba`、`pypinyin` 必需（缺失会报错）；`wordfreq` 可选，缺失时词频退回 jieba。
+脚本还会检查 `jieba`、`pypinyin`、`wordfreq` 三个导入；缺失时提示"按任意键安装"，自动执行
+`python -m pip install jieba pypinyin wordfreq` 后复查。随后运行 `tools\words2dict.py`，把
+`build\pehime.dict` 复制到 `build\x64\` 与 `build\x86\`（目录不存在则创建），复制完成后删除根目录的
+`build\pehime.dict`；`build\pehime_cn_dump.txt` 作为调试导出保留。
 
 ```cmd
-build_all.cmd    rem x64：每次都会重新生成中文词库 → 编译 build\PEHIME.EXE / build\ptest.exe
-build_x86.cmd    rem x86：用 i686-w64-mingw32-gcc 编译 build\x86\PEHIME.EXE / build\x86\ptest.exe
-                 rem      需先由 build_all.cmd 生成 build\pehime.dict；随后把 pehime.dict/pehime.ini 复制到 build\x86\
+rem 生成词库 → 复制到 build\x64\pehime.dict、build\x86\pehime.dict
+build_words.cmd
+rem 编译两个架构的可执行文件（不动词库）
+build_x64.cmd
+build_x86.cmd
 
-build\ptest.exe build\pehime.dict zhongguo nihao jisuanji    rem x64 核心测试
-build\ptest.exe build\pehime.dict -s 2 zhongguo              rem 选中第2个候选并看上屏
-build\PEHIME.EXE --selftest                                  rem x64 部署自检
+rem x64 核心测试与部署自检
+build\x64\ptest.exe build\x64\pehime.dict zhongguo nihao jisuanji
+build\x64\ptest.exe build\x64\pehime.dict -s 2 zhongguo
+build\x64\PEHIME.EXE --selftest
 
-build\x86\ptest.exe build\x86\pehime.dict zhongguo nihao jisuanji    rem 32 位核心测试
-build\x86\PEHIME.EXE --selftest                                      rem 32 位部署自检
+rem x86 核心测试与部署自检
+build\x86\ptest.exe build\x86\pehime.dict zhongguo nihao jisuanji
+build\x86\PEHIME.EXE --selftest
 ```
 
 运行时不依赖 Python 和第三方库。
@@ -371,11 +403,14 @@ build\x86\PEHIME.EXE --selftest                                      rem 32 位�
 | 22 | 删除 `pehime.dict` 后启动 | 不崩溃，可原文直输（`log=1` 时日志有错误） |
 | 23 | `PEHIME.EXE --selftest` | 退出码 0（`log=1` 时日志 `SELFTEST: OK`；不装钩子、不弹窗、不提权） |
 | 24 | 连续快速输入 20+ 字母 | 不丢键、不卡、不重复上屏 |
-| 25 | 运行 `build_x86.cmd` | 产出 `build\x86\PEHIME.EXE`、`build\x86\ptest.exe`；`build\pehime.dict`/`pehime.ini` 存在时被复制到 `build\x86\` |
-| 26 | `build\x86\ptest.exe build\x86\pehime.dict zhongguo nihao` 与 `build\x86\PEHIME.EXE --selftest` | 候选/上屏结果与 x64 一致，自检退出码 0 |
+| 25 | 运行 `build_words.cmd` | 生成 `build\pehime.dict` 与 `build\pehime_cn_dump.txt`；词库被复制到 `build\x64\`、`build\x86\`，根目录的 `build\pehime.dict` 复制后删除，`build\pehime_cn_dump.txt` 保留 |
+| 26 | 运行 `build_x64.cmd` | 产出 `build\x64\PEHIME.EXE`、`build\x64\ptest.exe`；不生成、不复制词库 |
+| 27 | 运行 `build_x86.cmd` | 产出 `build\x86\PEHIME.EXE`、`build\x86\ptest.exe`；不生成、不复制词库 |
+| 28 | `build\x64\ptest.exe build\x64\pehime.dict zhongguo nihao` 与 `build\x64\PEHIME.EXE --selftest` | 候选/上屏正常，自检退出码 0 |
+| 29 | `build\x86\ptest.exe build\x86\pehime.dict zhongguo nihao` 与 `build\x86\PEHIME.EXE --selftest` | 候选/上屏结果与 x64 一致，自检退出码 0 |
 
 第 1~24 项应在 x64 与 x86 两种构建上分别验证（32 位实机需 WinPE 10 x86 环境）；
-第 25~26 项为构建/自检项，x64 侧对应 `build_all.cmd` 与 `build\ptest.exe`、`build\PEHIME.EXE`。
+第 25~29 项为构建/自检项，覆盖三个根目录脚本的分工与两种架构的测试、自检。
 
 ## 11. 不在范围 / 已知限制
 
@@ -400,10 +435,10 @@ build\x86\PEHIME.EXE --selftest                                      rem 32 位�
 
 ## 13. 从零重建的推荐顺序
 
-1. **词库工具**：`tools/words2dict.py`（生成中文 `pehime.dict`）
+1. **词库工具**：`tools/words2dict.py`；用 `build_words.cmd` 生成中文 `pehime.dict` 并复制到 `build\x64\`、`build\x86\`
 2. **核心库**：`pehime_dict`（零拷贝读 + 遍历 + 音节二分查找）、`pehime_pinyin`（DP 切分/候选/提交），
    用 `ptest` 验证 `zhongguo`/`nihao`/`jisuanji`/长拼音
 3. **主程序**：钩子 → 状态机 → 候选生成（整串匹配/音节/前缀/简拼/原文）→ 注入队列
 4. **候选窗**：两行布局、定位、▲/▼ 点击、闪烁光标
 5. **配置/日志/自检/单实例/低完整性检测**
-6. **验证**：按第 10 节矩阵在 PE 实机逐项测试（x64 与 x86 各一轮）
+6. **验证**：先 `build_words.cmd`，再 `build_x64.cmd` / `build_x86.cmd`，按第 10 节矩阵在 PE 实机逐项测试（x64 与 x86 各一轮）

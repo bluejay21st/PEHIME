@@ -2,14 +2,7 @@
 
 版本：v0.2
 
-PEHIME 是给 **WinPE 10.0.19041 x64/x86** 用的极简中文输入法。WinPE 不加载第三方 IMM32/TSF
-输入法，因此采用「全局键盘钩子 + Unicode 注入」实现，纯 C99、单线程、静态链接：
-
-- 不写注册表、不装驱动/服务
-- 复制文件即可运行，删除文件即卸载
-- 需要管理员权限（启动时会自动请求 UAC 提权）
-
-## 功能
+## 核心功能
 
 - 全拼输入（最多 32 个字母）：整串匹配词优先，另含音节、前缀、简拼、原文等候选
 - 简拼：`cx`→程序、`cxy`→程序员、`cpgl`→磁盘管理、`nh`→你好、`ck`→词库
@@ -18,101 +11,52 @@ PEHIME 是给 **WinPE 10.0.19041 x64/x86** 用的极简中文输入法。WinPE �
 - 托盘图标 / PE 右下角状态方框；默认英文态，单击 Shift 切换中/英
 - 英文态所有按键原样直通，不吞键、不弹候选窗
 
-## 使用示例
+## 设计
 
-中文态下直接输入全拼，按空格或数字上屏：`zhongguo`→中国、`nihao`→你好、`jisuanji`→计算机、
-`cx`→程序（简拼）。
+- WinPE 不加载第三方 IMM32/TSF 输入法，因此用 `WH_KEYBOARD_LL` 全局键盘钩子拦截按键，
+  文本经队列用 `SendInput` 注入 Unicode；纯 C99、单线程、静态链接
+- 不写注册表、不装驱动/服务，复制文件即可运行，删除文件即卸载
+- 纯 C99、单线程；词库与架构无关，x64/x86 共用同一份 `pehime.dict`
+- 候选窗为自绘 `WS_EX_NOACTIVATE` 弹窗，不抢焦点、不进任务栏、始终置顶
 
-- 输入过程中用 `1`~`9` 选词、`-`/`=` 翻页；回车直接上屏拼音原文
-- 首字母大写，或拼音无法解析且未命中简拼时，首候选即原文，可直接上屏英文
+## 环境
 
-## 运行
+- WinPE 10.0.19041 x64/x86，以及现代 Windows（NT6+）；不承诺 NT5/XP 兼容
+- 需要管理员权限，普通用户启动时自动请求 UAC 提权
+- 运行时文件 `PEHIME.EXE`、`pehime.dict`（可缺省）、`pehime.ini`（可缺省）放在同一目录
 
-1. 将 `PEHIME.EXE`、`pehime.dict`、`pehime.ini`（后两个可缺省）放在同一目录
-2. 双击或命令行运行 `PEHIME.EXE`（首次运行会请求管理员权限）
-3. 单击 Shift 切换中/英；右键托盘图标或右下角方框可切换、退出
+## 依赖
 
-说明：
-
-- `pehime.ini` 缺失时会自动生成默认配置
-- 自检：`PEHIME.EXE --selftest`（不装钩子、不弹窗、不提权）
-
-## 卸载
-
-退出 PEHIME 后删除 `PEHIME.EXE`、`pehime.dict`、`pehime.ini`（以及可能生成的 `PEHIME.log`）即可。
-输入法不写注册表、不装服务/驱动，删除文件即完成卸载。
-
-## 配置 `pehime.ini`
-
-| 键 | 默认 | 说明 |
-|---|---|---|
-| `start_cn` | 0 | 1=启动中文，0=启动英文 |
-| `page_size` | 5 | 每页候选数（3~9） |
-| `page_height` | 20 | 候选窗字体像素高（10~40） |
-| `log` | 0 | 1=写 `PEHIME.log` |
-| `log_verbose` | 0 | 1=记录按键与候选列表（需 `log=1`） |
+- 运行时只依赖 Windows 系统 DLL，静态链接，无第三方运行时，EXE 不依赖 VCRuntime
+- 构建需要 w64devkit 2.11.0（GCC 16.2.0）：脚本首次运行时自动下载，无需 Visual Studio
+- 生成词库需要 Python 3.8+ 及 `jieba`、`pypinyin`、`wordfreq`；`build_words.cmd` 检测到缺失时
+  会提示「按任意键安装」并执行 `python -m pip install jieba pypinyin wordfreq`
 
 ## 构建
 
-需要 Python 3.8+，并安装 `jieba`、`pypinyin`（必需）和 `wordfreq`（可选）：
+先运行 `build_words.cmd` 生成词库（词库变化后需重新运行），再按需运行 `build_x64.cmd` / `build_x86.cmd`：
 
 ```cmd
-pip install jieba pypinyin wordfreq
-build_all.cmd
+rem 生成词库并复制到 build\x64\、build\x86\
+build_words.cmd
+rem 分别编译 x64 / x86 可执行文件
+build_x64.cmd
+build_x86.cmd
 ```
 
-- `build_all.cmd`：x64 构建，会重新生成中文词库，并编译 `build\PEHIME.EXE`、`build\ptest.exe`
-  （词库产物为 `build\pehime.dict`）
-- 首次构建会自动下载 w64devkit（GCC 16.2.0）；静态链接，无需 Visual Studio
+- `build_words.cmd`：检查 Python 3.8+（缺失或版本过低则报错、等待按键后退出）和 `jieba`/`pypinyin`/`wordfreq`，
+  缺少依赖时提示按任意键执行 `python -m pip install jieba pypinyin wordfreq` 并复查；
+  运行 `tools\words2dict.py` 生成 `build\pehime.dict`（`build\pehime_cn_dump.txt` 留作调试），
+  再把词库复制到 `build\x64\`、`build\x86\`，复制后删除根目录的 `build\pehime.dict`
+- `build_x64.cmd` / `build_x86.cmd`：只编译本架构的 `PEHIME.EXE` 与 `ptest.exe`，
+  不生成也不复制词库；缺少 w64devkit 时自动下载；x86 使用 `i686-w64-mingw32-gcc`
+- 产物布局：`build\x64\`、`build\x86\` 各含 `PEHIME.EXE`、`ptest.exe`、`pehime.dict`，
+  `build\pehime_cn_dump.txt` 为词库调试导出
 - 测试：
 
 ```cmd
-build\ptest.exe build\pehime.dict zhongguo nihao
-build\PEHIME.EXE --selftest
-```
-
-## 32 位构建
-
-`build_x86.cmd` 使用 w64devkit 自带的 `i686-w64-mingw32-gcc` 编译 32 位版本，输出
-`build\x86\PEHIME.EXE` 与 `build\x86\ptest.exe`。它需要先由 `build_all.cmd` 生成
-`build\pehime.dict`，构建后会把可用的 `build\pehime.dict`、`build\pehime.ini` 复制到 `build\x86\`：
-
-```cmd
-build_all.cmd
-build_x86.cmd
+build\x64\ptest.exe build\x64\pehime.dict zhongguo nihao
+build\x64\PEHIME.EXE --selftest
 build\x86\ptest.exe build\x86\pehime.dict zhongguo nihao
 build\x86\PEHIME.EXE --selftest
 ```
-
-x64 与 x86 两个版本共用同一份 `pehime.dict` / `pehime.ini` 和同一套配置格式。
-
-## 目录
-
-```
-src/hook/     主程序（键盘钩子、状态机、候选、上屏）
-src/core/     词库读取、全拼解析与候选
-src/ui/       候选窗、托盘 / 状态方框
-src/common/   配置、日志
-tools/        词库生成器、拼音测试、第三方许可
-build/        构建产物（x64；32 位在 build/x86/）
-```
-
-## 词库
-
-运行时的 `pehime.dict` 由 `tools/words2dict.py` 从 jieba 词表生成（415 音节 / 70,130 条），
-领域补充词在 `tools/words/`。改词后运行 `build_all.cmd` 重新生成即可（32 位版随后重跑
-`build_x86.cmd` 复制新词库）。
-
-## 已知限制
-
-- 支持 x64 与 x86 两种构建，目标 WinPE 10.0.19041 x64/x86 与现代 Windows（NT6+）；
-  不承诺 NT5/XP 兼容
-- XAML/TSF 界面（如新版任务栏、开始菜单）无法注入；部分自绘控件可能无效
-- 托盘图标在 Explorer 重启后不会自动恢复（重启输入法即可）
-
-## 许可
-
-本项目以 **Apache License 2.0** 开源，完整条款见 [LICENSE](LICENSE)。
-
-词库生成使用 jieba（MIT）、pypinyin（MIT）、wordfreq（Apache-2.0）、w64devkit（宽松许可），
-许可全文在 `tools/licenses/`；分发词库数据时请保留该目录。

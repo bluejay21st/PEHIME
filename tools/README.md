@@ -4,7 +4,7 @@
 
 ## 编译器（w64devkit）
 
-仓库不再直接携带编译器；`build_all.cmd` 发现 `tools\w64devkit` 不存在时会自动调用本脚本。也可以手动运行：
+仓库不再直接携带编译器；`build_x64.cmd` / `build_x86.cmd` 发现编译器不存在时会自动调用本脚本。也可以手动运行：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\get_w64devkit.ps1
@@ -15,7 +15,7 @@ powershell -ExecutionPolicy Bypass -File tools\get_w64devkit.ps1
 - SHA256：`54c2bb9962e8a30c8270e34c5efc3d5fee579f53087fa7d435b95fbba2af7b2b`
 - 解压位置：`tools\w64devkit\w64devkit\`（脚本会自动创建）
 - 校验：脚本会校验 SHA256，并检查 `bin\x86_64-w64-mingw32-gcc.exe` 是否可运行
-- 32 位构建：`build_x86.cmd` 使用同一目录下的 `bin\i686-w64-mingw32-gcc.exe`，不存在时同样会自动下载 w64devkit
+- 32 位构建：`build_x86.cmd` 使用同一目录下的 `bin\i686-w64-mingw32-gcc.exe`，缺少时同样会触发自动下载
 
 w64devkit 是便携的 C/C++ 开发套件（GCC、binutils、GNU Make、busybox-w32 等），
 只用于编译，不进入最终运行包；其许可为 public domain / 宽松许可，
@@ -38,23 +38,27 @@ MinGW-w64 运行时代码的许可见 `w64devkit` 目录内的 `COPYING.MinGW-w6
 CN_WORD_FILES = ["tools/words/cn_words_curated.txt"]
 ```
 
-每次运行 `build_all.cmd` 都会重新生成中文词库（覆盖 `build/pehime.dict`、`build/pehime_cn_dump.txt`）。
-32 位构建用根目录的 `build_x86.cmd`：它读取 `build/pehime.dict`（需先运行 `build_all.cmd`），
-编译 `build\x86\PEHIME.EXE`、`build\x86\ptest.exe`，并把 `build\pehime.dict`、`build\pehime.ini`
-复制到 `build\x86\` 供 32 位程序使用。
-构建脚本会检查 Python 3.8+；词库生成需要 `jieba` + `pypinyin`（必需）与 `wordfreq`
-（可选，缺失时词频退回 jieba）：
+根目录的 `build_words.cmd` 每次都会重新生成中文词库：运行 `tools/words2dict.py` 得到
+`build\pehime.dict` 与 `build\pehime_cn_dump.txt`，随后把 `build\pehime.dict` 复制到
+`build\x64\` 与 `build\x86\`（目录不存在则创建），复制后删除根目录的 `build\pehime.dict`；
+`build\pehime_cn_dump.txt` 作为可读导出保留，供调试用。
+
+`build_words.cmd` 会检查 Python 3.8+，并检查 `jieba`、`pypinyin`、`wordfreq` 三个导入；
+缺少依赖时提示「按任意键安装」，自动执行下面的命令后复查：
 
 ```cmd
-pip install jieba pypinyin wordfreq
+python -m pip install jieba pypinyin wordfreq
 ```
+
+两个可执行文件构建脚本 `build_x64.cmd` / `build_x86.cmd` 只编译 `PEHIME.EXE` 与 `ptest.exe`，
+不生成、不复制词库，也不要求 Python；词库变化后重跑 `build_words.cmd` 即可。
 
 ## 其他
 
 | 文件 | 用途 |
 |---|---|
 | `words2dict.py` | 生成 `build/pehime.dict` 和 `build/pehime_cn_dump.txt` |
-| `ptest.c` | 拼音核心命令行测试（构建时编为 `build/ptest.exe`，32 位为 `build/x86/ptest.exe`） |
+| `ptest.c` | 拼音核心命令行测试（构建时编为 `build/x64/ptest.exe`，32 位为 `build/x86/ptest.exe`） |
 | `licenses/` | 词库数据/工具涉及的第三方许可全文 |
 
 ## 开源项目与地址
@@ -71,6 +75,6 @@ pip install jieba pypinyin wordfreq
 | pypinyin | 汉字注音/多音字（生成中文词库） | MIT | https://github.com/mozillazg/python-pinyin |
 | wordfreq | 中文通用词频排序（生成中文词库） | Apache-2.0 | https://github.com/rspeer/wordfreq |
 
-- 运行包 `PEHIME.EXE`（x64 与 32 位 `build\x86\PEHIME.EXE`）只依赖 Windows 系统 DLL，不链接这些开源库。
+- 运行包 `build\x64\PEHIME.EXE` 与 32 位 `build\x86\PEHIME.EXE` 只依赖 Windows 系统 DLL，不链接这些开源库。
 - 词库数据由上述数据/工具生成，是衍生数据；许可全文在 `tools/licenses/`。
 - `tools/words/cn_words_curated.txt` 为项目补充词，非第三方词表。

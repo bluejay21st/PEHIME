@@ -78,7 +78,7 @@ try {
 
     Write-Host "OK:"
     & $gcc --version | Select-Object -First 1
-    Write-Host "现在可以运行：build_all.cmd"
+    Write-Host "现在可以运行：build_words.cmd / build_x64.cmd / build_x86.cmd"
 }
 finally {
     if (Test-Path $archive) {
