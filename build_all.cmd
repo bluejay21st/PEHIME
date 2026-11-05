@@ -3,7 +3,7 @@ rem ===================================================================
 rem PEIM build script (project root)
 rem
 rem Every build:
-rem   1) regenerate CN + EN dictionaries with tools\words2dict.py
+rem   1) regenerate the CN dictionary with tools\words2dict.py
 rem      (requires Python 3.8+ with jieba/pypinyin/wordfreq)
 rem   2) compile build\PEIMH.EXE
 rem   3) compile build\ptest.exe
@@ -48,8 +48,8 @@ if not exist "%CC%" (
   exit /b 1
 )
 
-rem ---------- 3) dictionaries (always regenerate) ----------
-echo [1/3] build dictionaries with tools\words2dict.py
+rem ---------- 3) dictionary (always regenerate) ----------
+echo [1/3] build dictionary with tools\words2dict.py
 python "%~dp0tools\words2dict.py"
 if errorlevel 1 (
   echo [ERROR] words2dict.py failed.
@@ -61,7 +61,7 @@ rem ---------- 4) main program ----------
 echo [2/3] build PEIMH.EXE ^(hook IME^)
 "%CC%" -O2 -Wall -Wextra -std=c99 -DUNICODE -D_UNICODE -Isrc/core -Isrc/ui -Isrc/common ^
   -mwindows -o build\PEIMH.EXE ^
-  src\hook\hook_main.c src\core\peim_dict.c src\core\peim_pinyin.c src\core\peim_en.c ^
+  src\hook\hook_main.c src\core\peim_dict.c src\core\peim_pinyin.c ^
   src\ui\peim_candwin.c src\ui\peim_tray.c src\common\peim_log.c src\common\peim_config.c ^
   -luser32 -lgdi32 -lshell32 -ladvapi32 -static -static-libgcc -s
 if errorlevel 1 (

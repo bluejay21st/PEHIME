@@ -1,4 +1,4 @@
-﻿#include "peim_dict.h"
+#include "peim_dict.h"
 
 #include <string.h>
 
@@ -16,7 +16,8 @@ static uint32_t rd32(const uint8_t *p)
 int peim_dict_open(PeimDict *d, const void *data, uint32_t size)
 {
     const uint8_t *p = (const uint8_t *)data;
-    uint32_t need, i;
+    const uint8_t *end;
+    uint32_t i, j;
 
     if (!d || !p || size < 12)
         return -1;
@@ -32,6 +33,9 @@ int peim_dict_open(PeimDict *d, const void *data, uint32_t size)
     d->entry_count = rd32(p + 8);
 
     if (d->syllable_count == 0 || d->syllable_count > PEIM_MAX_SYLLABLES)
+        return -1;
+    /* 每条词条至少 8 字节（1 + 2 + 2 + 1 + 2），先排除离谱的 entry_count */
+    if (d->entry_count > size / 8)
         return -1;
 
     /* 音节表 */
@@ -49,8 +53,31 @@ int peim_dict_open(PeimDict *d, const void *data, uint32_t size)
         p += len;
     }
     d->entries = p;
-    need = (uint32_t)(p - d->base);
-    (void)need;
+
+    /* 整段校验词条区：损坏的词库一律按加载失败处理，避免后续遍历越界读取 */
+    end = d->base + d->size;
+    for (i = 0; i < d->entry_count; ++i) {
+        uint8_t n, text_len;
+        if (p >= end)
+            return -1;
+        n = *p++;
+        if (n == 0 || n > PEIM_MAX_WORD_SYL)
+            return -1;
+        if ((size_t)(end - p) < (size_t)n * 2 + 2 + 1)
+            return -1;
+        for (j = 0; j < n; ++j) {
+            if (rd16(p + (size_t)j * 2) >= d->syllable_count)
+                return -1;
+        }
+        p += (size_t)n * 2;
+        p += 2;                 /* weight */
+        text_len = *p++;
+        if (text_len == 0 || text_len > PEIM_MAX_TEXT_UNITS)
+            return -1;
+        if ((size_t)(end - p) < (size_t)text_len * 2)
+            return -1;
+        p += (size_t)text_len * 2;
+    }
     return 0;
 }
 
@@ -122,18 +149,29 @@ int peim_dict_syl_is_prefix(const PeimDict *d, const char *s, int len)
 /* 解析一条词条，返回下一条的指针；d 用于边界检查 */
 static const uint8_t *entry_next(const PeimDict *d, const uint8_t *p, PeimEntry *e)
 {
-    uint8_t n;
+    const uint8_t *end = d->base + d->size;
+    uint8_t n, text_len;
+
+    if (p >= end)
+        return NULL;
     n = *p++;
+    if (n == 0 || n > PEIM_MAX_WORD_SYL)
+        return NULL;
     e->syl_count = n;
     e->syl = p;
+    if ((size_t)(end - p) < (size_t)n * 2 + 2 + 1)
+        return NULL;
     p += (size_t)n * 2;
     e->weight = rd16(p);
     p += 2;
-    e->text_len = *p++;
-    e->text = p;
-    p += (size_t)e->text_len * 2;
-    if (p > d->base + d->size)
+    text_len = *p++;
+    if (text_len == 0 || text_len > PEIM_MAX_TEXT_UNITS)
         return NULL;
+    e->text_len = text_len;
+    e->text = p;
+    if ((size_t)(end - p) < (size_t)text_len * 2)
+        return NULL;
+    p += (size_t)text_len * 2;
     return p;
 }
 

@@ -1,5 +1,5 @@
 /*
- * hook_main.c —— PEIM 钩子版输入法（WinPE / Windows 桌面通用）v0.1
+ * hook_main.c —— PEIM 钩子版输入法（面向 WinPE）v0.2
  *
  * 原理：WH_KEYBOARD_LL 全局键盘钩子拦截按键 → 组字/候选窗 → SendInput
  *       (KEYEVENTF_UNICODE) 把字符注入前台窗口。
@@ -9,11 +9,11 @@
  *  - 拼音用"音节权重 + 动态规划"切分；候选按：整串完全匹配词 → 音节候选 → 前缀候选
  *    （zhongg → 二字词优先；zhongguod → 三字词；fangan → 方案）
  *  - 输入不是合法拼音且长度 2~4 时支持简拼（cx→程序、cxy→程序员、cpgl→磁盘管理）
- *  - 标点按键盘原样输入（不做中文标点转换）；原文候选用于无法解析/首字母大写
+ *  - 中文态标点按默认中文输入法映射（详见 Spec FR-10）；原文候选用于无法解析/首字母大写
  *  - 候选窗两行：第一行拼音 + 闪烁光标，第二行候选；▲/▼ 可点击翻页
  *
  * 英文输入：
- *  - 字母照常输入；按英文词库给出短词优先的补全候选，1~9/Tab 选择，空格结束联想
+ *  - 所有按键原样放行：不组字、不显示候选窗，输入法不出现；Shift 单击切回中文
  *
  * 界面/退出：
  *  - 默认英文态（start_cn=0），避免 PE 菜单/工具按键被吞
@@ -31,12 +31,11 @@
 #include "peim_log.h"
 #include "peim_candwin.h"
 #include "peim_tray.h"
-#include "peim_en.h"
 
-#define PEIM_HOOK_VERSION L"0.1"
+#define PEIM_HOOK_VERSION L"0.2"
 #define PEIM_MUTEX_NAME   L"PEIM_HOOK_SINGLE_INSTANCE"
 #define WM_PEIM_INJECT    (WM_APP + 1)
-#define PEIM_PENDING_MAX  16
+#define PEIM_PENDING_MAX  64
 
 typedef struct {
     int      raw;      /* 1 = 原文候选 */
@@ -71,20 +70,8 @@ static int              g_page;
 
 static WCHAR g_pending[PEIM_PENDING_MAX][PEIM_MAX_RAW + 2];
 static int   g_pending_len[PEIM_PENDING_MAX];
-static int   g_pending_back[PEIM_PENDING_MAX];   /* 上屏前先退几格 */
 static int   g_pending_head;
 static int   g_pending_count;
-
-/* 英文联想：独立于中文输入状态 */
-static PeimEnDict       g_en;
-static int              g_en_ok;
-static void            *g_en_mem;
-static char             g_en_buf[PEIM_MAX_RAW];
-static int              g_en_len;
-static int              g_en_cap;        /* 首字母是否大写 */
-static HWND             g_en_fg;         /* 记录前台窗口，切换窗口时清空联想 */
-static PeimEnWord       g_en_cands[PEIM_EN_MAX_CAND];
-static int              g_en_ncand;
 
 static int is_low_integrity(void)
 {
@@ -139,7 +126,7 @@ static void load_dict(void)
 
     if (!g_dir[0])
         return;
-    _snprintf(path, sizeof(path) - 1, "%s\\peim_cn.dict", g_dir);
+    _snprintf(path, sizeof(path) - 1, "%s\\peim.dict", g_dir);
     path[sizeof(path) - 1] = 0;
     h = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
                     NULL, OPEN_EXISTING, 0, NULL);
@@ -162,45 +149,6 @@ static void load_dict(void)
         } else {
             free(mem);
             peim_log("ERROR: dict format bad");
-        }
-    } else if (mem) {
-        free(mem);
-    }
-    CloseHandle(h);
-}
-
-static void load_en_dict(void)
-{
-    char path[MAX_PATH + 32];
-    HANDLE h;
-    DWORD size, read;
-    void *mem;
-
-    if (!g_dir[0])
-        return;
-    _snprintf(path, sizeof(path) - 1, "%s\\peim_en.dict", g_dir);
-    path[sizeof(path) - 1] = 0;
-    h = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                    NULL, OPEN_EXISTING, 0, NULL);
-    if (h == INVALID_HANDLE_VALUE) {
-        peim_log("english dict not found (english suggestions off)");
-        return;
-    }
-    size = GetFileSize(h, NULL);
-    if (size <= 10 || size > 8 * 1024 * 1024) {
-        CloseHandle(h);
-        peim_log("english dict size bad");
-        return;
-    }
-    mem = malloc(size);
-    if (mem && ReadFile(h, mem, size, &read, NULL) && read == size) {
-        if (peim_en_open(&g_en, mem, size) == 0) {
-            g_en_ok = 1;
-            g_en_mem = mem;
-            peim_log("english dict loaded: %u words", (unsigned)g_en.count);
-        } else {
-            free(mem);
-            peim_log("ERROR: english dict format bad");
         }
     } else if (mem) {
         free(mem);
@@ -482,7 +430,7 @@ static void refresh_cands(void)
 
     prefix_first = eng ? 1 : (np == 0 || has_tail);
 
-    /* 整串完全匹配的词优先（如 fangan -> 方案，xian -> 西安） */
+    /* 整串完全匹配的词优先（如 fangan -> 方案） */
     for (i = 0; i < g_pref_n; ++i) {
         if (entry_pinyin_len(&g_dict, &g_pref[i].cand.e) == g_comp.raw_len &&
             !item_has(&g_pref[i].cand.e))
@@ -552,7 +500,7 @@ static void inject_direct(const WCHAR *text, int len)
     }
 }
 
-static void queue_inject_replace(int back, const WCHAR *text, int len)
+static void queue_inject(const WCHAR *text, int len)
 {
     int idx;
     if (!text || len <= 0)
@@ -560,29 +508,16 @@ static void queue_inject_replace(int back, const WCHAR *text, int len)
     if (len > PEIM_MAX_RAW)
         len = PEIM_MAX_RAW;
     if (g_pending_count >= PEIM_PENDING_MAX) {
-        while (back-- > 0) {
-            INPUT in[2];
-            memset(in, 0, sizeof(in));
-            in[0].type = INPUT_KEYBOARD;
-            in[0].ki.wVk = VK_BACK;
-            in[1] = in[0];
-            in[1].ki.dwFlags = KEYEVENTF_KEYUP;
-            SendInput(2, in, sizeof(INPUT));
-        }
-        inject_direct(text, len);
+        /* 正常不会满（单次按键最多上屏 32 个音节 + 1 个标点，队列 64 条）；
+         * 真满了也只能丢弃，绝不能在低级钩子回调里直接 SendInput（会死锁/乱序）。 */
+        peim_log("ERROR: inject queue full, drop %d chars", len);
         return;
     }
     idx = (g_pending_head + g_pending_count) % PEIM_PENDING_MAX;
     memcpy(g_pending[idx], text, (size_t)len * sizeof(WCHAR));
     g_pending_len[idx] = len;
-    g_pending_back[idx] = back;
     g_pending_count++;
     PostMessageW(g_msgwnd, WM_PEIM_INJECT, 0, 0);
-}
-
-static void queue_inject(const WCHAR *text, int len)
-{
-    queue_inject_replace(0, text, len);
 }
 
 static void queue_inject_ascii_len(const char *s, int len)
@@ -597,16 +532,6 @@ static void queue_inject_ascii_len(const char *s, int len)
 static void flush_inject(void)
 {
     while (g_pending_count > 0) {
-        int i, back = g_pending_back[g_pending_head];
-        for (i = 0; i < back; ++i) {
-            INPUT in[2];
-            memset(in, 0, sizeof(in));
-            in[0].type = INPUT_KEYBOARD;
-            in[0].ki.wVk = VK_BACK;
-            in[1] = in[0];
-            in[1].ki.dwFlags = KEYEVENTF_KEYUP;
-            SendInput(2, in, sizeof(INPUT));
-        }
         inject_direct(g_pending[g_pending_head], g_pending_len[g_pending_head]);
         g_pending_head = (g_pending_head + 1) % PEIM_PENDING_MAX;
         g_pending_count--;
@@ -659,7 +584,7 @@ static void update_window_at(const POINT *anchor)
 
     memset(&v, 0, sizeof(v));
     v.mode = g_cn;
-    v.font_height = g_cfg.font_height;
+    v.font_height = g_cfg.page_height;
     v.notify = g_msgwnd;
     memcpy(v.pinyin, g_typed, g_typed_len);
     v.pinyin[g_typed_len] = 0;
@@ -738,158 +663,7 @@ static void flash_mode(void)
     if (!g_candwnd)
         return;
     get_anchor(&pt);
-    peim_cand_flash(g_candwnd, g_cn, pt);
-}
-
-static int is_letter_vk(UINT vk);   /* 定义在后面，英文联想里先用 */
-
-/* ------------------------------------------------------------------ */
-/* 英文联想                                                            */
-/* ------------------------------------------------------------------ */
-
-static void en_clear(void)
-{
-    g_en_len = 0;
-    g_en_cap = 0;
-    g_en_ncand = 0;
-    hide_window();
-}
-
-static void en_refresh(void)
-{
-    PeimCandView v;
-    POINT pt;
-    int n, i, k;
-
-    if (!g_en_ok || !g_cfg.en_suggest || g_en_len < 1) {
-        g_en_ncand = 0;
-        hide_window();
-        return;
-    }
-    n = peim_en_prefix(&g_en, g_en_buf, g_en_len, g_en_cands, PEIM_EN_MAX_CAND);
-    if (n <= 0) {
-        g_en_ncand = 0;
-        hide_window();
-        return;
-    }
-    g_en_ncand = n;
-
-    memset(&v, 0, sizeof(v));
-    v.mode = 0;
-    v.font_height = g_cfg.font_height;
-    v.notify = g_msgwnd;
-    memcpy(v.pinyin, g_en_buf, (size_t)g_en_len);
-    v.pinyin[g_en_len] = 0;
-    v.page = 0;
-    v.pages = 1;
-    v.ncand = n;
-    for (i = 0; i < n; ++i) {
-        for (k = 0; k < g_en_cands[i].len && k < PEIM_CAND_MAX_CHARS; ++k)
-            v.cands[i][k] = (WCHAR)g_en_cands[i].word[k];
-        v.cands[i][k] = 0;
-    }
-    get_anchor(&pt);
-    peim_cand_show(g_candwnd, &v, pt);
-}
-
-static void en_select(int idx)
-{
-    WCHAR out[PEIM_EN_MAX_WORD];
-    int i, n, back;
-
-    if (idx < 0 || idx >= g_en_ncand)
-        return;
-    n = g_en_cands[idx].len;
-    for (i = 0; i < n; ++i) {
-        WCHAR c = (WCHAR)g_en_cands[idx].word[i];
-        if (i == 0 && g_en_cap && c >= L'a' && c <= L'z')
-            c = (WCHAR)(c - L'a' + L'A');
-        out[i] = c;
-    }
-    back = g_en_len;
-    g_en_len = 0;
-    g_en_cap = 0;
-    g_en_ncand = 0;
-    hide_window();
-    queue_inject_replace(back, out, n);
-    peim_log("english: replace %d -> %d chars", back, n);
-}
-
-/* 英文模式下：字母照常输入，同时给出补全候选；数字/Tab 选择，Space 等结束联想 */
-static int handle_en_key(UINT vk, int down, int shift)
-{
-    HWND fg;
-
-    if (!down)
-        return 0;
-
-    fg = GetForegroundWindow();
-    if (fg != g_en_fg) {
-        g_en_fg = fg;
-        en_clear();
-    }
-
-    if (is_letter_vk(vk)) {
-        char ch = shift ? (char)vk : (char)(vk - 'A' + 'a');
-        if (g_en_len == 0)
-            g_en_cap = shift ? 1 : 0;
-        if (g_en_len < PEIM_MAX_RAW - 1) {
-            if (ch >= 'A' && ch <= 'Z')
-                ch = (char)(ch - 'A' + 'a');
-            g_en_buf[g_en_len++] = ch;
-            g_en_buf[g_en_len] = 0;
-        }
-        en_refresh();
-        return 0;
-    }
-
-    if (vk == VK_BACK) {
-        if (g_en_len > 0) {
-            g_en_buf[--g_en_len] = 0;
-            if (g_en_len >= 1)
-                en_refresh();
-            else {
-                g_en_ncand = 0;
-                hide_window();
-            }
-        }
-        return 0;
-    }
-
-    if (vk >= '1' && vk <= '9') {
-        if (g_en_ncand > 0) {
-            int idx = (int)(vk - '1');
-            if (idx < g_en_ncand)
-                en_select(idx);
-            return 1;
-        }
-        return 0;
-    }
-
-    if (vk == VK_TAB) {
-        if (g_en_ncand > 0) {
-            en_select(0);
-            return 1;
-        }
-        return 0;
-    }
-
-    if (vk == VK_ESCAPE) {
-        if (g_en_ncand > 0) {
-            en_clear();
-            return 1;
-        }
-        return 0;
-    }
-
-    /* 其它键（空格/回车/标点/方向键等）结束联想 */
-    if (g_en_len > 0 || g_en_ncand > 0) {
-        g_en_len = 0;
-        g_en_cap = 0;
-        g_en_ncand = 0;
-        hide_window();
-    }
-    return 0;
+    peim_cand_flash(g_candwnd, g_cn, g_cfg.page_height, pt);
 }
 
 /* ------------------------------------------------------------------ */
@@ -923,6 +697,8 @@ static void select_item(int idx)
     if (it->early) {
         WCHAR out[PEIM_CAND_MAX_CHARS];
         n = it->cand.e.text_len;
+        if (n > PEIM_CAND_MAX_CHARS)
+            n = PEIM_CAND_MAX_CHARS;
         for (i = 0; i < n; ++i)
             out[i] = (WCHAR)peim_entry_char(&it->cand.e, i);
         queue_inject(out, n);
@@ -943,7 +719,8 @@ static void select_item(int idx)
             out[i] = (WCHAR)text[i];
         queue_inject(out, n);
     }
-    peim_log("select[%d] -> %d chars, consumed=%d", idx, n, end);
+    peim_log("select[%d] -> %d chars, consumed=%d, raw_end=%d",
+             idx, n, (int)it->cand.consumed, end);
     if (end > 0 && end <= g_typed_len) {
         memmove(g_typed, g_typed + end, (size_t)(g_typed_len - end));
         g_typed_len -= end;
@@ -997,11 +774,11 @@ static void backspace_one(void)
 static void toggle_mode(void)
 {
     g_cn = !g_cn;
+    g_shift_clean = 0;   /* 托盘/方框切换后，松开 Shift 不再触发第二次切换 */
     g_quote_single = 0;
     g_quote_double = 0;
     peim_log("toggle -> %s", g_cn ? "CN" : "EN");
     clear_all();
-    en_clear();
     peim_tray_set_mode(g_cn);
     flash_mode();
 }
@@ -1084,10 +861,12 @@ static int handle_key(UINT vk, int down)
             g_shift_clean = 1;
             return 0;
         }
-        if (g_shift_clean) {
-            g_shift_clean = 0;
+        /* 只处理"干净"的单击 Shift：按住 Ctrl/Alt/Win 时释放 Shift 不切模式 */
+        if (g_shift_clean &&
+            !kv_down(VK_CONTROL) && !kv_down(VK_MENU) &&
+            !kv_down(VK_LWIN) && !kv_down(VK_RWIN))
             toggle_mode();
-        }
+        g_shift_clean = 0;
         return 0;
     }
     if (down)
@@ -1097,13 +876,10 @@ static int handle_key(UINT vk, int down)
         return 0;
 
 
-    if (kv_down(VK_CONTROL) || kv_down(VK_MENU) || kv_down(VK_LWIN) || kv_down(VK_RWIN)) {
-        if (!g_cn)
-            en_clear();   /* 组合键打断英文联想 */
+    if (kv_down(VK_CONTROL) || kv_down(VK_MENU) || kv_down(VK_LWIN) || kv_down(VK_RWIN))
         return 0;
-    }
     if (!g_cn)
-        return handle_en_key(vk, down, shift);
+        return 0;   /* 英文态：所有键原样放行，不组字、不显示候选窗 */
     {
         int plen = 0;
         const WCHAR *punct = cn_punct_for_key(vk, shift, &plen);
@@ -1369,7 +1145,7 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE prev, LPSTR cmd, int show)
     get_dir();
     peim_config_load(&g_cfg, g_dir);
     if (g_cfg.log)
-        peim_log_open(g_dir, g_cfg.log_verbose);
+        peim_log_open(g_dir);
     g_cn = g_cfg.start_cn ? 1 : 0;
     peim_log("PEIMH start, dir=%s, start_cn=%d, ver=%ls", g_dir, g_cn, PEIM_HOOK_VERSION);
 
@@ -1377,7 +1153,6 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE prev, LPSTR cmd, int show)
     if (wstr_has(GetCommandLineW(), L"--selftest")) {
         HWND cw;
         load_dict();
-        load_en_dict();
         cw = peim_cand_create(hinst);
         peim_log("SELFTEST: dict_ok=%d candwnd=%p version=%ls",
                  g_dict_ok, (void *)cw, PEIM_HOOK_VERSION);
@@ -1445,7 +1220,6 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE prev, LPSTR cmd, int show)
     }
 
     load_dict();
-    load_en_dict();
 
     memset(&wc, 0, sizeof(wc));
     wc.cbSize = sizeof(wc);

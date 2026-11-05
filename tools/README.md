@@ -30,21 +30,16 @@ MinGW-w64 运行时代码的许可见 `w64devkit` 目录内的 `COPYING.MinGW-w6
 | 文件 | 用途 |
 |---|---|
 | `words/cn_words_curated.txt` | 中文领域补充词（最高优先级） |
-| `words/en_words_freq.txt` | 英文常用词源（按频率排序） |
-| `words/en_words_curated.txt` | 英文领域补充词（最高优先级） |
 
-`words2dict.py` 头部用两个数组分别列出源文件：
+`words2dict.py` 头部用 `CN_WORD_FILES` 数组列出中文补充词源文件：
 
 ```python
 CN_WORD_FILES = ["tools/words/cn_words_curated.txt"]
-EN_WORD_FILES = [
-    "tools/words/en_words_freq.txt",
-    "tools/words/en_words_curated.txt",
-]
 ```
 
-每次运行 `build_all.cmd` 都会重新生成两个词库（覆盖 `build/peim_cn.dict`、`build/peim_en.dict`）。
-构建脚本会检查 Python；需要 Python 3.8+ + `jieba` + `pypinyin` + `wordfreq`：
+每次运行 `build_all.cmd` 都会重新生成中文词库（覆盖 `build/peim.dict`、`build/peim_cn_dump.txt`）。
+构建脚本会检查 Python 3.8+；词库生成需要 `jieba` + `pypinyin`（必需）与 `wordfreq`
+（可选，缺失时词频退回 jieba）：
 
 ```cmd
 pip install jieba pypinyin wordfreq
@@ -54,7 +49,7 @@ pip install jieba pypinyin wordfreq
 
 | 文件 | 用途 |
 |---|---|
-| `words2dict.py` | 同时生成 `build/peim_cn.dict`、`build/peim_cn_dump.txt` 和 `build/peim_en.dict` |
+| `words2dict.py` | 生成 `build/peim.dict` 和 `build/peim_cn_dump.txt` |
 | `ptest.c` | 拼音核心命令行测试（构建时编为 `build/ptest.exe`） |
 | `licenses/` | 词库数据/工具涉及的第三方许可全文 |
 
@@ -71,8 +66,7 @@ pip install jieba pypinyin wordfreq
 | jieba | 中文分词/词频（生成中文词库） | MIT | https://github.com/fxsjy/jieba |
 | pypinyin | 汉字注音/多音字（生成中文词库） | MIT | https://github.com/mozillazg/python-pinyin |
 | wordfreq | 中文通用词频排序（生成中文词库） | Apache-2.0 | https://github.com/rspeer/wordfreq |
-| google-10000-english | 英文常用词源（生成英文词库） | 仓库未声明明确许可 | https://github.com/first20hours/google-10000-english |
 
 - 运行包 `PEIMH.EXE` 只依赖 Windows 系统 DLL，不链接这些开源库。
 - 词库数据由上述数据/工具生成，是衍生数据；许可全文在 `tools/licenses/`。
-- `tools/words/en_words_curated.txt` 和 `tools/words/cn_words_curated.txt` 为项目补充词，非第三方词表。
+- `tools/words/cn_words_curated.txt` 为项目补充词，非第三方词表。

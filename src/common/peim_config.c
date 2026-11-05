@@ -26,17 +26,19 @@ static void write_default_config(const char *path)
     if (!f)
         return;
     fputs("\xEF\xBB\xBF"
-          "; start_cn      0=启动英文（默认），1=启动中文\n"
+          "; 是否默认启动中文：0=关闭，1=开启\n"
           "start_cn=0\n"
-          "; page_size     每页候选数 3~9\n"
+          "\n"
+          "; 每页候选词数量：3~9\n"
           "page_size=5\n"
-          "; font_height   候选窗字体像素高 10~40\n"
-          "font_height=16\n"
-          "; en_suggest    1=英文模式显示单词补全\n"
-          "en_suggest=1\n"
-          "; log           1=写 PEIM.log\n"
-          "log=1\n"
-          "; log_verbose   1=记录每次按键与候选列表（调试）\n"
+          "\n"
+          "; 候选窗字体像素高度：10~40\n"
+          "page_height=20\n"
+          "\n"
+          "; 是否写日志：0=关闭，1=开启\n"
+          "log=0\n"
+          "\n"
+          "; 日志是否记录每次按键与候选列表（调试）：0=关闭，1=开启\n"
           "log_verbose=0\n", f);
     fclose(f);
 }
@@ -51,9 +53,8 @@ void peim_config_load(PeimConfig *cfg, const char *exe_dir)
         return;
     cfg->start_cn = 0;
     cfg->page_size = 5;
-    cfg->font_height = 16;
-    cfg->en_suggest = 1;
-    cfg->log = 1;
+    cfg->page_height = 20;
+    cfg->log = 0;
     cfg->log_verbose = 0;
 
     if (!exe_dir || !exe_dir[0])
@@ -100,13 +101,11 @@ void peim_config_load(PeimConfig *cfg, const char *exe_dir)
             int v = atoi(val);
             if (v >= 3 && v <= 9)
                 cfg->page_size = v;
-        } else if (!_stricmp(key, "font_height")) {
+        } else if (!_stricmp(key, "page_height")) {
             int v = atoi(val);
             if (v >= 10 && v <= 40)
-                cfg->font_height = v;
-        } else if (!_stricmp(key, "en_suggest"))
-            cfg->en_suggest = atoi(val) ? 1 : 0;
-        else if (!_stricmp(key, "log"))
+                cfg->page_height = v;
+        } else if (!_stricmp(key, "log"))
             cfg->log = atoi(val) ? 1 : 0;
         else if (!_stricmp(key, "log_verbose"))
             cfg->log_verbose = atoi(val) ? 1 : 0;

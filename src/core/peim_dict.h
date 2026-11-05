@@ -27,6 +27,8 @@
 
 #define PEIM_MAX_SYLLABLES 512
 #define PEIM_MAX_SYL_INPUT 16   /* 一次最多 16 个音节（32 个字母） */
+#define PEIM_MAX_WORD_SYL  8    /* 单个词条最多 8 个音节 */
+#define PEIM_MAX_TEXT_UNITS 8   /* 单个词条最多 8 个 UTF-16 单元 */
 
 typedef struct {
     uint8_t         syl_count;

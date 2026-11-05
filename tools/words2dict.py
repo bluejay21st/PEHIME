@@ -1,38 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PEIM 词库生成器（words2dict.py）—— 一次生成中文 + 英文两个词库
+PEIM 词库生成器（words2dict.py）—— 生成中文词库
 
 配置在文件头部：
   CN_WORD_FILES  中文补充词文件列表（基础词表仍来自 jieba 自带 dict.txt）
-  EN_WORD_FILES  英文词文件列表（第 1 个 = 按频率排序的常用词源，其余 = 补充词）
 
 产物：
-  build/peim_cn.dict       中文词库（C 直接读取）
+  build/peim.dict          中文词库（C 直接读取）
   build/peim_cn_dump.txt   中文词库可读导出（调试用）
-  build/peim_en.dict       英文联想词库
 
 中文数据来源：
   - 单字/词：jieba 自带 dict.txt（MIT）
   - 拼音：pypinyin（pinyin-data，MIT）
   - 排序：wordfreq 通用词频（zipf），缺失时退回 jieba 词频
-英文数据来源：
-  - tools/words/en_words_freq.txt（Google 10k 常用词，按频率排序）
-  - tools/words/en_words_curated.txt（项目补充词，最高权重）
 
 中文格式 v1（小端）：
   u32 magic 'PEIM'; u16 version=1; u16 syllable_count; u32 entry_count
   音节表：u8 len + ASCII 名称（按字典序升序）
   词条：u8 syl_count + u16 syl_ids[] + u16 weight + u8 text_len + u16 text[]（UTF-16LE）
-
-英文格式 v1（小端）：
-  u32 magic 'PEEN'; u16 version=1; u32 count
-  u32 offsets[count]（相对词条区偏移）
-  词条区：u8 len + ASCII 小写词 + u16 weight（按字典序升序）
 """
 import math
 import os
-import re
 import struct
 import sys
 
@@ -45,19 +34,14 @@ except Exception:
     _zipf = None
 
 # =====================================================================
-# 词库文件配置：分别列出 CN / EN 两组文件
+# 词库文件配置：中文补充词文件
 # =====================================================================
 CN_WORD_FILES = [
     "tools/words/cn_words_curated.txt",
 ]
-EN_WORD_FILES = [
-    "tools/words/en_words_freq.txt",       # 英文常用词源（按频率排序）
-    "tools/words/en_words_curated.txt",    # 英文补充词（最高权重）
-]
 
-CN_DICT = "build/peim_cn.dict"
+CN_DICT = "build/peim.dict"
 CN_DUMP = "build/peim_cn_dump.txt"
-EN_DICT = "build/peim_en.dict"
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CJK_MIN, CJK_MAX = 0x4E00, 0x9FFF
@@ -103,7 +87,6 @@ COMMON_READINGS = {
 
 # ü 的两种输入习惯：lve/lue、nve/nue 都要能用
 SYL_ALIAS = {"lve": ["lve", "lue"], "nve": ["nve", "nue"]}
-WORD_RE = re.compile(r"^[a-z]{2,16}$")
 
 
 # =====================================================================
@@ -182,20 +165,6 @@ def read_curated_files(files):
                         out[w] = syls
                     continue
                 out.setdefault(w, None)
-    return out
-
-
-def read_words(rel):
-    """英文词：一行一个，只保留 2~16 个小写字母。"""
-    p = path_of(rel)
-    out = []
-    if not os.path.exists(p):
-        return out
-    with open(p, encoding="utf-8", errors="ignore") as f:
-        for line in f:
-            w = line.strip().lower()
-            if WORD_RE.match(w):
-                out.append(w)
     return out
 
 
@@ -416,62 +385,10 @@ def build_cn():
     return len(records)
 
 
-# =====================================================================
-# 英文词库
-# =====================================================================
-def build_en():
-    freq_files = EN_WORD_FILES[:1]
-    curated_files = EN_WORD_FILES[1:]
-
-    raw = []
-    for rel in freq_files:
-        raw.extend(read_words(rel))
-    if not raw:
-        print("警告: 未找到英文常用词源（%s）" % ", ".join(freq_files))
-
-    curated = []
-    for rel in curated_files:
-        curated.extend(read_words(rel))
-
-    weights = {}
-    n = max(1, len(raw))
-    for i, w in enumerate(raw):
-        weight = max(1, 65535 - int(50000 * i / n))
-        if weight > weights.get(w, 0):
-            weights[w] = weight
-    for w in curated:
-        weights[w] = 65535
-
-    words = sorted(weights.keys())
-    entries = []
-    offsets = []
-    off = 0
-    for w in words:
-        b = w.encode("ascii")
-        offsets.append(off)
-        entries.append(struct.pack("<B", len(b)) + b + struct.pack("<H", weights[w]))
-        off += 1 + len(b) + 2
-
-    blob = bytearray(b"PEEN")
-    blob += struct.pack("<HI", 1, len(words))
-    for o in offsets:
-        blob += struct.pack("<I", o)
-    for e in entries:
-        blob += e
-
-    out_path = path_of(EN_DICT)
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    with open(out_path, "wb") as f:
-        f.write(blob)
-    print("[EN] 词条 %d，文件 %d 字节 (%.1f KB)" % (len(words), len(blob), len(blob) / 1024))
-    return len(words)
-
-
 def main():
-    print("words2dict: 生成中文 + 英文词库")
+    print("words2dict: 生成中文词库")
     cn = build_cn()
-    en = build_en()
-    print("完成：CN=%d 条，EN=%d 条" % (cn, en))
+    print("完成：CN=%d 条" % cn)
     return 0
 
 

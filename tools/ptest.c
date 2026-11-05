@@ -82,7 +82,9 @@ static void dump(const PeimComp *c, const PeimCand *cands, int n)
         for (i = page * 5; i < (page + 1) * 5 && i < n; ++i) {
             const PeimEntry *e = &cands[i].e;
             int t, tl = e->text_len;
-            for (t = 0; t < tl && t < 30; ++t)
+            if (tl > 30)
+                tl = 30;
+            for (t = 0; t < tl; ++t)
                 text[t] = peim_entry_char(e, t);
             out(" %d.", i + 1);
             out_chars(text, tl);

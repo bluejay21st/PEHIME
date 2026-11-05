@@ -9,14 +9,12 @@
 #define PEIM_LOG_MAX_BYTES (512 * 1024)
 
 static FILE *g_file;
-static int   g_verbose;
 static char  g_path[MAX_PATH];
 
-void peim_log_open(const char *exe_dir, int verbose)
+void peim_log_open(const char *exe_dir)
 {
     const char *dir = getenv("PEIM_LOG_DIR");
 
-    g_verbose = verbose;
     if (!exe_dir || !exe_dir[0])
         return;
 

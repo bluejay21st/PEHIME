@@ -28,7 +28,7 @@ void peim_cand_destroy(HWND wnd);
 /* pt_screen: 候选窗左上角参考点（屏幕坐标） */
 void peim_cand_show(HWND wnd, const PeimCandView *view, POINT pt_screen);
 void peim_cand_hide(HWND wnd);
-void peim_cand_flash(HWND wnd, int mode, POINT pt_screen);
+void peim_cand_flash(HWND wnd, int mode, int font_height, POINT pt_screen);
 
 #endif /* PEIM_CANDWIN_H */
 

@@ -4,7 +4,7 @@
 #ifndef PEIM_LOG_H
 #define PEIM_LOG_H
 
-void peim_log_open(const char *exe_dir, int verbose);
+void peim_log_open(const char *exe_dir);
 void peim_log(const char *fmt, ...);
 void peim_log_close(void);
 

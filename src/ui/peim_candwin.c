@@ -447,12 +447,12 @@ void peim_cand_hide(HWND wnd)
     ShowWindow(wnd, SW_HIDE);
 }
 
-void peim_cand_flash(HWND wnd, int mode, POINT pt_screen)
+void peim_cand_flash(HWND wnd, int mode, int font_height, POINT pt_screen)
 {
     PeimCandView v;
     memset(&v, 0, sizeof(v));
     v.mode = mode;
-    v.font_height = g_font_h;
+    v.font_height = font_height > 0 ? font_height : g_font_h;
     peim_cand_show(wnd, &v, pt_screen);
     stop_timers(wnd);
     g_timer = SetTimer(wnd, 1, FLASH_MS, NULL);
