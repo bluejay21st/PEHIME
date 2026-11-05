@@ -1,4 +1,4 @@
-﻿#include "peim_pinyin.h"
+﻿#include "pehime_pinyin.h"
 
 #include <string.h>
 
@@ -6,41 +6,41 @@
 /* 拼音切分：加权 DP，避免"最长优先"造成 ming|o|ng 这类错误切分        */
 /* ------------------------------------------------------------------ */
 
-#define PEIM_MAX_SYL_LEN 6
-#define DP_POS (PEIM_MAX_RAW + 1)
-#define DP_SYL (PEIM_MAX_SYL_INPUT + 1)
+#define PEHIME_MAX_SYL_LEN 6
+#define DP_POS (PEHIME_MAX_RAW + 1)
+#define DP_SYL (PEHIME_MAX_SYL_INPUT + 1)
 
 /* 每个音节的分值 = 该音节下单字候选的最大权重（近似该音节常用度） */
 static uint16_t       g_sylw[2048];
-static const PeimDict *g_sylw_dict;
+static const PehimeDict *g_sylw_dict;
 
-static int sylw_cb(const PeimDict *d, const PeimEntry *e, void *ctx)
+static int sylw_cb(const PehimeDict *d, const PehimeEntry *e, void *ctx)
 {
     uint16_t id;
     (void)d;
     (void)ctx;
     if (e->syl_count != 1)
         return 0;
-    id = peim_entry_syl(e, 0);
+    id = pehime_entry_syl(e, 0);
     if (id < 2048 && e->weight > g_sylw[id])
         g_sylw[id] = e->weight;
     return 0;
 }
 
-static void sylw_init(const PeimDict *d)
+static void sylw_init(const PehimeDict *d)
 {
     uint16_t i;
     if (g_sylw_dict == d)
         return;
     memset(g_sylw, 0, sizeof(g_sylw));
-    peim_dict_each(d, sylw_cb, NULL);
+    pehime_dict_each(d, sylw_cb, NULL);
     for (i = 0; i < d->syllable_count && i < 2048; ++i)
         if (g_sylw[i] == 0)
             g_sylw[i] = 1;
     g_sylw_dict = d;
 }
 
-int peim_comp_parse(const PeimDict *d, PeimComp *c)
+int pehime_comp_parse(const PehimeDict *d, PehimeComp *c)
 {
     static uint32_t dp_sum[DP_POS][DP_SYL];
     static uint8_t  dp_ok[DP_POS][DP_SYL];
@@ -51,8 +51,8 @@ int peim_comp_parse(const PeimDict *d, PeimComp *c)
 
     if (!d || !c)
         return -1;
-    if (c->raw_len >= PEIM_MAX_RAW)
-        c->raw_len = PEIM_MAX_RAW - 1;
+    if (c->raw_len >= PEHIME_MAX_RAW)
+        c->raw_len = PEHIME_MAX_RAW - 1;
     c->raw[c->raw_len] = 0;
     c->nsyl = 0;
     c->tail_pos = c->raw_len;
@@ -69,13 +69,13 @@ int peim_comp_parse(const PeimDict *d, PeimComp *c)
 
     /* 正向 DP：dp[pos][k] = 用 k 个完整音节覆盖 raw[0..pos) 的最大总分 */
     for (pos = 1; pos <= n; ++pos) {
-        for (len = 1; len <= PEIM_MAX_SYL_LEN && len <= pos; ++len) {
-            int id = peim_dict_syl_id(d, c->raw + pos - len, len);
+        for (len = 1; len <= PEHIME_MAX_SYL_LEN && len <= pos; ++len) {
+            int id = pehime_dict_syl_id(d, c->raw + pos - len, len);
             uint32_t w;
             if (id < 0)
                 continue;
             w = g_sylw[id] ? g_sylw[id] : 1;
-            for (k = 1; k <= PEIM_MAX_SYL_INPUT; ++k) {
+            for (k = 1; k <= PEHIME_MAX_SYL_INPUT; ++k) {
                 uint32_t sum;
                 if (!dp_ok[pos - len][k - 1])
                     continue;
@@ -94,12 +94,12 @@ int peim_comp_parse(const PeimDict *d, PeimComp *c)
      * 在同一个切分终点里再选"平均音节权重"最高的那一种。 */
     {
         int have_full = 0;
-        for (k = 0; k <= PEIM_MAX_SYL_INPUT; ++k)
+        for (k = 0; k <= PEHIME_MAX_SYL_INPUT; ++k)
             if (dp_ok[n][k])
                 have_full = 1;
 
         if (have_full) {
-            for (k = 0; k <= PEIM_MAX_SYL_INPUT; ++k) {
+            for (k = 0; k <= PEHIME_MAX_SYL_INPUT; ++k) {
                 uint64_t num, den;
                 if (!dp_ok[n][k])
                     continue;
@@ -117,9 +117,9 @@ int peim_comp_parse(const PeimDict *d, PeimComp *c)
         } else {
             /* 整串切不完：从后往前找最长的完整前缀，剩余部分作为未完成音节 */
             for (cut = n - 1; cut >= 0 && best_cut < 0; --cut) {
-                if (!peim_dict_syl_is_prefix(d, c->raw + cut, n - cut))
+                if (!pehime_dict_syl_is_prefix(d, c->raw + cut, n - cut))
                     continue;
-                for (k = 0; k <= PEIM_MAX_SYL_INPUT; ++k) {
+                for (k = 0; k <= PEHIME_MAX_SYL_INPUT; ++k) {
                     uint64_t num, den;
                     if (!dp_ok[cut][k])
                         continue;
@@ -158,13 +158,13 @@ int peim_comp_parse(const PeimDict *d, PeimComp *c)
     return 0;
 }
 typedef struct {
-    const PeimComp *c;
-    PeimCand       *out;
+    const PehimeComp *c;
+    PehimeCand       *out;
     int             cap;
     int             n;
 } CandCtx;
 
-static int cand_cb(const PeimDict *d, const PeimEntry *e, void *vctx)
+static int cand_cb(const PehimeDict *d, const PehimeEntry *e, void *vctx)
 {
     CandCtx *x = (CandCtx *)vctx;
     int i, k;
@@ -174,7 +174,7 @@ static int cand_cb(const PeimDict *d, const PeimEntry *e, void *vctx)
         return 0;
     k = e->syl_count;
     for (i = 0; i < k; ++i) {
-        if (peim_entry_syl(e, i) != x->c->syl[i])
+        if (pehime_entry_syl(e, i) != x->c->syl[i])
             return 0;
     }
     if (x->n < x->cap) {
@@ -185,7 +185,7 @@ static int cand_cb(const PeimDict *d, const PeimEntry *e, void *vctx)
     return 0;
 }
 
-int peim_comp_candidates(const PeimDict *d, const PeimComp *c, PeimCand *out, int cap)
+int pehime_comp_candidates(const PehimeDict *d, const PehimeComp *c, PehimeCand *out, int cap)
 {
     CandCtx x;
     int i, j;
@@ -197,14 +197,14 @@ int peim_comp_candidates(const PeimDict *d, const PeimComp *c, PeimCand *out, in
     x.out = out;
     x.cap = cap;
     x.n = 0;
-    peim_dict_each(d, cand_cb, &x);
+    pehime_dict_each(d, cand_cb, &x);
 
     /* 覆盖音节多者优先；同覆盖长度按 weight 降序 */
     for (i = 1; i < x.n; ++i) {
-        PeimCand key = x.out[i];
+        PehimeCand key = x.out[i];
         j = i - 1;
         while (j >= 0) {
-            const PeimCand *cur = &x.out[j];
+            const PehimeCand *cur = &x.out[j];
             int better = 0;
             if (key.consumed > cur->consumed)
                 better = 1;
@@ -220,7 +220,7 @@ int peim_comp_candidates(const PeimDict *d, const PeimComp *c, PeimCand *out, in
     return x.n;
 }
 
-int peim_comp_commit(const PeimDict *d, PeimComp *c, const PeimCand *cand,
+int pehime_comp_commit(const PehimeDict *d, PehimeComp *c, const PehimeCand *cand,
                      uint16_t *out, int cap)
 {
     int i, n, end;
@@ -231,14 +231,14 @@ int peim_comp_commit(const PeimDict *d, PeimComp *c, const PeimCand *cand,
     if (n > cap)
         return -1;
     for (i = 0; i < n; ++i)
-        out[i] = peim_entry_char(&cand->e, i);
+        out[i] = pehime_entry_char(&cand->e, i);
 
     end = (int)c->syl_end[cand->consumed - 1];
     if (end > (int)c->raw_len)
         return -1;
     memmove(c->raw, c->raw + end, (size_t)(c->raw_len - end));
     c->raw_len = (uint8_t)(c->raw_len - end);
-    peim_comp_parse(d, c);
+    pehime_comp_parse(d, c);
     return n;
 }
 

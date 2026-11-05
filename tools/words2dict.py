@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PEIM 词库生成器（words2dict.py）—— 生成中文词库
+PEHIME 词库生成器（words2dict.py）—— 生成中文词库
 
 配置在文件头部：
   CN_WORD_FILES  中文补充词文件列表（基础词表仍来自 jieba 自带 dict.txt）
 
 产物：
-  build/peim.dict          中文词库（C 直接读取）
-  build/peim_cn_dump.txt   中文词库可读导出（调试用）
+  build/pehime.dict          中文词库（C 直接读取）
+  build/pehime_cn_dump.txt   中文词库可读导出（调试用）
 
 中文数据来源：
   - 单字/词：jieba 自带 dict.txt（MIT）
@@ -16,7 +16,8 @@ PEIM 词库生成器（words2dict.py）—— 生成中文词库
   - 排序：wordfreq 通用词频（zipf），缺失时退回 jieba 词频
 
 中文格式 v1（小端）：
-  u32 magic 'PEIM'; u16 version=1; u16 syllable_count; u32 entry_count
+  u32 magic 0x4D494550（4 字节格式标识，沿用原有二进制格式）
+  u16 version=1; u16 syllable_count; u32 entry_count
   音节表：u8 len + ASCII 名称（按字典序升序）
   词条：u8 syl_count + u16 syl_ids[] + u16 weight + u8 text_len + u16 text[]（UTF-16LE）
 """
@@ -40,8 +41,8 @@ CN_WORD_FILES = [
     "tools/words/cn_words_curated.txt",
 ]
 
-CN_DICT = "build/peim.dict"
-CN_DUMP = "build/peim_cn_dump.txt"
+CN_DICT = "build/pehime.dict"
+CN_DUMP = "build/pehime_cn_dump.txt"
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CJK_MIN, CJK_MAX = 0x4E00, 0x9FFF
@@ -352,7 +353,8 @@ def build_cn():
             records.append((ids, weight, text))
     records.sort(key=lambda r: r[0])
 
-    out = [b"PEIM", struct.pack("<HHI", 1, len(syllables), len(records))]
+    # 4 字节格式标识 0x4D494550（沿用原有二进制格式，保持兼容）
+    out = [struct.pack("<I", 0x4D494550), struct.pack("<HHI", 1, len(syllables), len(records))]
     for s in syllables:
         b = s.encode("ascii")
         out.append(struct.pack("<B", len(b)) + b)

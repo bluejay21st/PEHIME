@@ -1,11 +1,11 @@
 @echo off
 rem ===================================================================
-rem PEIM build script (project root)
+rem PEHIME build script (project root)
 rem
 rem Every build:
 rem   1) regenerate the CN dictionary with tools\words2dict.py
 rem      (requires Python 3.8+ with jieba/pypinyin/wordfreq)
-rem   2) compile build\PEIMH.EXE
+rem   2) compile build\PEHIME.EXE
 rem   3) compile build\ptest.exe
 rem
 rem If tools\w64devkit is missing, tools\get_w64devkit.ps1 is run
@@ -58,21 +58,21 @@ if errorlevel 1 (
 )
 
 rem ---------- 4) main program ----------
-echo [2/3] build PEIMH.EXE ^(hook IME^)
+echo [2/3] build PEHIME.EXE ^(hook IME^)
 "%CC%" -O2 -Wall -Wextra -std=c99 -DUNICODE -D_UNICODE -Isrc/core -Isrc/ui -Isrc/common ^
-  -mwindows -o build\PEIMH.EXE ^
-  src\hook\hook_main.c src\core\peim_dict.c src\core\peim_pinyin.c ^
-  src\ui\peim_candwin.c src\ui\peim_tray.c src\common\peim_log.c src\common\peim_config.c ^
+  -mwindows -o build\PEHIME.EXE ^
+  src\hook\hook_main.c src\core\pehime_dict.c src\core\pehime_pinyin.c ^
+  src\ui\pehime_candwin.c src\ui\pehime_tray.c src\common\pehime_log.c src\common\pehime_config.c ^
   -luser32 -lgdi32 -lshell32 -ladvapi32 -static -static-libgcc -s
 if errorlevel 1 (
-  echo [ERROR] PEIMH build failed.
+  echo [ERROR] PEHIME build failed.
   exit /b 1
 )
 
 rem ---------- 5) test program ----------
 echo [3/3] build ptest.exe ^(pinyin core test^)
 "%CC%" -O2 -Wall -Wextra -std=c99 -DUNICODE -D_UNICODE -Isrc/core ^
-  -o build\ptest.exe src\core\peim_dict.c src\core\peim_pinyin.c tools\ptest.c ^
+  -o build\ptest.exe src\core\pehime_dict.c src\core\pehime_pinyin.c tools\ptest.c ^
   -static -static-libgcc -s
 if errorlevel 1 (
   echo [ERROR] ptest build failed.

@@ -1,4 +1,4 @@
-#include "peim_dict.h"
+#include "pehime_dict.h"
 
 #include <string.h>
 
@@ -13,7 +13,7 @@ static uint32_t rd32(const uint8_t *p)
            ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
-int peim_dict_open(PeimDict *d, const void *data, uint32_t size)
+int pehime_dict_open(PehimeDict *d, const void *data, uint32_t size)
 {
     const uint8_t *p = (const uint8_t *)data;
     const uint8_t *end;
@@ -21,9 +21,9 @@ int peim_dict_open(PeimDict *d, const void *data, uint32_t size)
 
     if (!d || !p || size < 12)
         return -1;
-    if (rd32(p) != PEIM_DICT_MAGIC)
+    if (rd32(p) != PEHIME_DICT_MAGIC)
         return -1;
-    if (rd16(p + 4) != PEIM_DICT_VERSION)
+    if (rd16(p + 4) != PEHIME_DICT_VERSION)
         return -1;
 
     memset(d, 0, sizeof(*d));
@@ -32,7 +32,7 @@ int peim_dict_open(PeimDict *d, const void *data, uint32_t size)
     d->syllable_count = rd16(p + 6);
     d->entry_count = rd32(p + 8);
 
-    if (d->syllable_count == 0 || d->syllable_count > PEIM_MAX_SYLLABLES)
+    if (d->syllable_count == 0 || d->syllable_count > PEHIME_MAX_SYLLABLES)
         return -1;
     /* 每条词条至少 8 字节（1 + 2 + 2 + 1 + 2），先排除离谱的 entry_count */
     if (d->entry_count > size / 8)
@@ -61,7 +61,7 @@ int peim_dict_open(PeimDict *d, const void *data, uint32_t size)
         if (p >= end)
             return -1;
         n = *p++;
-        if (n == 0 || n > PEIM_MAX_WORD_SYL)
+        if (n == 0 || n > PEHIME_MAX_WORD_SYL)
             return -1;
         if ((size_t)(end - p) < (size_t)n * 2 + 2 + 1)
             return -1;
@@ -72,7 +72,7 @@ int peim_dict_open(PeimDict *d, const void *data, uint32_t size)
         p += (size_t)n * 2;
         p += 2;                 /* weight */
         text_len = *p++;
-        if (text_len == 0 || text_len > PEIM_MAX_TEXT_UNITS)
+        if (text_len == 0 || text_len > PEHIME_MAX_TEXT_UNITS)
             return -1;
         if ((size_t)(end - p) < (size_t)text_len * 2)
             return -1;
@@ -81,7 +81,7 @@ int peim_dict_open(PeimDict *d, const void *data, uint32_t size)
     return 0;
 }
 
-const char *peim_dict_syl_name(const PeimDict *d, uint16_t id, int *len)
+const char *pehime_dict_syl_name(const PehimeDict *d, uint16_t id, int *len)
 {
     if (!d || id >= d->syllable_count)
         return NULL;
@@ -104,7 +104,7 @@ static int syl_cmp(const char *name, int nlen, const char *s, int slen)
     return 0;
 }
 
-int peim_dict_syl_id(const PeimDict *d, const char *s, int len)
+int pehime_dict_syl_id(const PehimeDict *d, const char *s, int len)
 {
     int lo, hi;
     if (!d || len <= 0)
@@ -124,7 +124,7 @@ int peim_dict_syl_id(const PeimDict *d, const char *s, int len)
     return -1;
 }
 
-int peim_dict_syl_is_prefix(const PeimDict *d, const char *s, int len)
+int pehime_dict_syl_is_prefix(const PehimeDict *d, const char *s, int len)
 {
     int lo, hi, pos;
     if (!d || len <= 0)
@@ -147,7 +147,7 @@ int peim_dict_syl_is_prefix(const PeimDict *d, const char *s, int len)
 }
 
 /* 解析一条词条，返回下一条的指针；d 用于边界检查 */
-static const uint8_t *entry_next(const PeimDict *d, const uint8_t *p, PeimEntry *e)
+static const uint8_t *entry_next(const PehimeDict *d, const uint8_t *p, PehimeEntry *e)
 {
     const uint8_t *end = d->base + d->size;
     uint8_t n, text_len;
@@ -155,7 +155,7 @@ static const uint8_t *entry_next(const PeimDict *d, const uint8_t *p, PeimEntry 
     if (p >= end)
         return NULL;
     n = *p++;
-    if (n == 0 || n > PEIM_MAX_WORD_SYL)
+    if (n == 0 || n > PEHIME_MAX_WORD_SYL)
         return NULL;
     e->syl_count = n;
     e->syl = p;
@@ -165,7 +165,7 @@ static const uint8_t *entry_next(const PeimDict *d, const uint8_t *p, PeimEntry 
     e->weight = rd16(p);
     p += 2;
     text_len = *p++;
-    if (text_len == 0 || text_len > PEIM_MAX_TEXT_UNITS)
+    if (text_len == 0 || text_len > PEHIME_MAX_TEXT_UNITS)
         return NULL;
     e->text_len = text_len;
     e->text = p;
@@ -175,7 +175,7 @@ static const uint8_t *entry_next(const PeimDict *d, const uint8_t *p, PeimEntry 
     return p;
 }
 
-int peim_dict_each(const PeimDict *d, PeimEntryFn fn, void *ctx)
+int pehime_dict_each(const PehimeDict *d, PehimeEntryFn fn, void *ctx)
 {
     const uint8_t *p;
     uint32_t i;
@@ -183,7 +183,7 @@ int peim_dict_each(const PeimDict *d, PeimEntryFn fn, void *ctx)
         return 0;
     p = d->entries;
     for (i = 0; i < d->entry_count; ++i) {
-        PeimEntry e;
+        PehimeEntry e;
         const uint8_t *next;
         if (p >= d->base + d->size)
             break;
@@ -199,12 +199,12 @@ int peim_dict_each(const PeimDict *d, PeimEntryFn fn, void *ctx)
 }
 
 /* 提供安全的非对齐 16 位读取 */
-uint16_t peim_entry_syl(const PeimEntry *e, int i)
+uint16_t pehime_entry_syl(const PehimeEntry *e, int i)
 {
     return rd16(e->syl + (size_t)i * 2);
 }
 
-uint16_t peim_entry_char(const PeimEntry *e, int i)
+uint16_t pehime_entry_char(const PehimeEntry *e, int i)
 {
     return rd16(e->text + (size_t)i * 2);
 }

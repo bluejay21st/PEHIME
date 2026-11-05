@@ -1,4 +1,4 @@
-﻿# PEIM 编译器下载/解压脚本
+﻿# PEHIME 编译器下载/解压脚本
 #
 # 用法（在项目根目录或任意目录）：
 #   powershell -ExecutionPolicy Bypass -File tools\get_w64devkit.ps1
@@ -35,7 +35,7 @@ if ([string]::IsNullOrWhiteSpace($Sha256) -and $usingDefaultUrl -and $Version -e
     $Sha256 = '54c2bb9962e8a30c8270e34c5efc3d5fee579f53087fa7d435b95fbba2af7b2b'
 }
 
-Write-Host "PEIM toolchain bootstrap"
+Write-Host "PEHIME toolchain bootstrap"
 Write-Host "  version    : $Version"
 Write-Host "  url        : $Url"
 Write-Host "  destination: $Destination"

@@ -14,11 +14,11 @@
 
 #include <windows.h>
 
-#include "peim_dict.h"
-#include "peim_pinyin.h"
+#include "pehime_dict.h"
+#include "pehime_pinyin.h"
 
 static FILE *g_log;
-static PeimDict g_dict;
+static PehimeDict g_dict;
 
 static void put_utf8(FILE *f, const uint16_t *text, int n)
 {
@@ -56,7 +56,7 @@ static void out_chars(const uint16_t *text, int n)
         put_utf8(g_log, text, n);
 }
 
-static void dump(const PeimComp *c, const PeimCand *cands, int n)
+static void dump(const PehimeComp *c, const PehimeCand *cands, int n)
 {
     uint16_t text[32];
     int i, page, pages;
@@ -64,7 +64,7 @@ static void dump(const PeimComp *c, const PeimCand *cands, int n)
     out("  parse:");
     for (i = 0; i < c->nsyl; ++i) {
         int len = 0;
-        const char *name = peim_dict_syl_name(&g_dict, c->syl[i], &len);
+        const char *name = pehime_dict_syl_name(&g_dict, c->syl[i], &len);
         if (i)
             out("|");
         out("%.*s", len, name);
@@ -80,12 +80,12 @@ static void dump(const PeimComp *c, const PeimCand *cands, int n)
     for (page = 0; page < pages; ++page) {
         out("  p%d:", page + 1);
         for (i = page * 5; i < (page + 1) * 5 && i < n; ++i) {
-            const PeimEntry *e = &cands[i].e;
+            const PehimeEntry *e = &cands[i].e;
             int t, tl = e->text_len;
             if (tl > 30)
                 tl = 30;
             for (t = 0; t < tl; ++t)
-                text[t] = peim_entry_char(e, t);
+                text[t] = pehime_entry_char(e, t);
             out(" %d.", i + 1);
             out_chars(text, tl);
             out("[%d]", cands[i].consumed);
@@ -126,7 +126,7 @@ int main(int argc, char **argv)
     }
     fclose(fp);
 
-    if (peim_dict_open(&g_dict, data, (uint32_t)fsize) != 0) {
+    if (pehime_dict_open(&g_dict, data, (uint32_t)fsize) != 0) {
         printf("bad dict format\n");
         return 2;
     }
@@ -134,8 +134,8 @@ int main(int argc, char **argv)
         (unsigned)g_dict.syllable_count, (unsigned)g_dict.entry_count, fsize);
 
     for (i = 2; i < argc; ++i) {
-        PeimComp comp;
-        PeimCand cands[PEIM_MAX_CAND];
+        PehimeComp comp;
+        PehimeCand cands[PEHIME_MAX_CAND];
         int n, j;
 
         if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
@@ -143,7 +143,7 @@ int main(int argc, char **argv)
             continue;
         }
         memset(&comp, 0, sizeof(comp));
-        for (j = 0; argv[i][j] && j < PEIM_MAX_RAW - 1; ++j) {
+        for (j = 0; argv[i][j] && j < PEHIME_MAX_RAW - 1; ++j) {
             char ch = argv[i][j];
             if (ch >= 'A' && ch <= 'Z')
                 ch = (char)(ch - 'A' + 'a');
@@ -152,16 +152,16 @@ int main(int argc, char **argv)
             comp.raw[comp.raw_len++] = ch;
         }
         out("==== %.*s\n", (int)comp.raw_len, comp.raw);
-        if (peim_comp_parse(&g_dict, &comp) < 0) {
+        if (pehime_comp_parse(&g_dict, &comp) < 0) {
             out("  [invalid pinyin prefix]\n");
             continue;
         }
-        n = peim_comp_candidates(&g_dict, &comp, cands, PEIM_MAX_CAND);
+        n = pehime_comp_candidates(&g_dict, &comp, cands, PEHIME_MAX_CAND);
         dump(&comp, cands, n);
 
         if (select > 0 && select <= n) {
             uint16_t text[32];
-            int tl = peim_comp_commit(&g_dict, &comp, &cands[select - 1], text, 32);
+            int tl = pehime_comp_commit(&g_dict, &comp, &cands[select - 1], text, 32);
             if (tl < 0) {
                 out("  [commit failed]\n");
                 continue;
@@ -169,7 +169,7 @@ int main(int argc, char **argv)
             out("  commit -> ");
             out_chars(text, tl);
             out("  remaining raw='%.*s'\n", (int)comp.raw_len, comp.raw);
-            n = peim_comp_candidates(&g_dict, &comp, cands, PEIM_MAX_CAND);
+            n = pehime_comp_candidates(&g_dict, &comp, cands, PEHIME_MAX_CAND);
             if (n > 0)
                 dump(&comp, cands, n);
             select = 0;

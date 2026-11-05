@@ -1,9 +1,9 @@
 /*
- * peim_tray.c —— 托盘图标 / PE 右下角状态方框（实现见 peim_tray.h）
+ * pehime_tray.c —— 托盘图标 / PE 右下角状态方框（实现见 pehime_tray.h）
  *
  * 只做两件事：显示当前中/英状态；把"切换/退出"请求发给主程序的消息窗口。
  */
-#include "peim_tray.h"
+#include "pehime_tray.h"
 
 #include <shellapi.h>
 #include <stdio.h>
@@ -88,9 +88,9 @@ static void show_menu(HWND owner, HWND notify)
     PostMessageW(owner, WM_NULL, 0, 0);
 
     if (cmd == MENU_TOGGLE)
-        PostMessageW(notify, PEIM_TRAY_MSG_TOGGLE, 0, 0);
+        PostMessageW(notify, PEHIME_TRAY_MSG_TOGGLE, 0, 0);
     else if (cmd == MENU_QUIT)
-        PostMessageW(notify, PEIM_TRAY_MSG_QUIT, 0, 0);
+        PostMessageW(notify, PEHIME_TRAY_MSG_QUIT, 0, 0);
 }
 
 /* ---------------- 托盘模式 ---------------- */
@@ -104,7 +104,7 @@ static void update_tray(void)
     nid.uID = TRAY_ID;
     nid.uFlags = NIF_ICON | NIF_TIP;
     nid.hIcon = g_cn ? g_icon_cn : g_icon_en;
-    lstrcpynW(nid.szTip, g_cn ? L"PEIM 输入法 - 中文" : L"PEIM 输入法 - 英文", 64);
+    lstrcpynW(nid.szTip, g_cn ? L"PEHIME 输入法 - 中文" : L"PEHIME 输入法 - 英文", 64);
     Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
 
@@ -113,7 +113,7 @@ static LRESULT CALLBACK tray_proc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
     if (msg == TRAY_CALLBACK) {
         switch (LOWORD(lp)) {
         case WM_LBUTTONUP:
-            PostMessageW(g_notify, PEIM_TRAY_MSG_TOGGLE, 0, 0);
+            PostMessageW(g_notify, PEHIME_TRAY_MSG_TOGGLE, 0, 0);
             return 0;
         case WM_RBUTTONUP:
         case WM_CONTEXTMENU:
@@ -130,7 +130,7 @@ static int init_tray(void)
 {
     WNDCLASSEXW wc;
     NOTIFYICONDATAW nid;
-    WCHAR cls[] = L"PEIMTrayWnd";
+    WCHAR cls[] = L"PEHIMETrayWnd";
 
     memset(&wc, 0, sizeof(wc));
     wc.cbSize = sizeof(wc);
@@ -155,7 +155,7 @@ static int init_tray(void)
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = TRAY_CALLBACK;
     nid.hIcon = g_cn ? g_icon_cn : g_icon_en;
-    lstrcpynW(nid.szTip, g_cn ? L"PEIM 输入法 - 中文" : L"PEIM 输入法 - 英文", 64);
+    lstrcpynW(nid.szTip, g_cn ? L"PEHIME 输入法 - 中文" : L"PEHIME 输入法 - 英文", 64);
     if (!Shell_NotifyIconW(NIM_ADD, &nid)) {
         DestroyWindow(g_tray_wnd);
         g_tray_wnd = NULL;
@@ -236,7 +236,7 @@ static LRESULT CALLBACK ind_proc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_MOUSEACTIVATE:
         return MA_NOACTIVATE;
     case WM_LBUTTONDOWN:
-        PostMessageW(g_notify, PEIM_TRAY_MSG_TOGGLE, 0, 0);
+        PostMessageW(g_notify, PEHIME_TRAY_MSG_TOGGLE, 0, 0);
         return 0;
     case WM_RBUTTONDOWN:
         show_menu(wnd, g_notify);
@@ -252,7 +252,7 @@ static LRESULT CALLBACK ind_proc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 static int init_indicator(void)
 {
     WNDCLASSEXW wc;
-    WCHAR cls[] = L"PEIMIndWnd";
+    WCHAR cls[] = L"PEHIMEIndWnd";
 
     memset(&wc, 0, sizeof(wc));
     wc.cbSize = sizeof(wc);
@@ -264,7 +264,7 @@ static int init_indicator(void)
         return 0;
 
     g_ind_wnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE,
-                                cls, L"PEIM", WS_POPUP,
+                                cls, L"PEHIME", WS_POPUP,
                                 0, 0, IND_SIZE, IND_SIZE, NULL, NULL, g_hinst, NULL);
     if (!g_ind_wnd)
         return 0;
@@ -274,14 +274,14 @@ static int init_indicator(void)
 
 /* ---------------- 对外接口 ---------------- */
 
-int peim_tray_init(HINSTANCE hinst, HWND notify)
+int pehime_tray_init(HINSTANCE hinst, HWND notify)
 {
     g_hinst = hinst;
     g_notify = notify;
     g_mode = 0;
 
-    /* 调试用：设置 PEIM_INDICATOR=1 可强制走"右下角方框"模式 */
-    if (getenv("PEIM_INDICATOR")) {
+    /* 调试用：设置 PEHIME_INDICATOR=1 可强制走"右下角方框"模式 */
+    if (getenv("PEHIME_INDICATOR")) {
         if (init_indicator())
             g_mode = 2;
     } else if (init_tray()) {
@@ -292,7 +292,7 @@ int peim_tray_init(HINSTANCE hinst, HWND notify)
     return g_mode == 1 ? 1 : (g_mode == 2 ? 0 : -1);
 }
 
-void peim_tray_set_mode(int cn)
+void pehime_tray_set_mode(int cn)
 {
     g_cn = cn ? 1 : 0;
     if (g_tray_wnd) {
@@ -304,7 +304,7 @@ void peim_tray_set_mode(int cn)
     }
 }
 
-void peim_tray_destroy(void)
+void pehime_tray_destroy(void)
 {
     if (g_tray_wnd) {
         NOTIFYICONDATAW nid;

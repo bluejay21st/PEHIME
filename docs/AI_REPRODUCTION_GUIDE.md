@@ -1,19 +1,20 @@
-# PEIM AI 复现指南（实现规格与验收）
+# PEHIME AI 复现指南（实现规格与验收）
 
 版本标识：**v0.2**（当前发布版本）
-项目：PEIM —— WinPE 用的极简全拼中文输入法
+项目：PEHIME —— WinPE 用的极简全拼中文输入法
 
 > 本文是**实现契约**：按本文从零实现，应能通过第 10 节验收矩阵。
 > 项目结构、模块职责和修改指引见 [README.md](../README.md)。
 
 ## 1. 背景与目标
 
-目标环境 **WinPE 10.0.19041 / zh-CN / x64**（ADK 2004 生成的 PE）没有可用的第三方中文输入法：
+目标环境 **WinPE 10.0.19041 / zh-CN / x64 或 x86**（ADK 2004 生成的 PE）没有可用的第三方中文输入法：
 
 - 无 `ctfmon`、无 TSF 输入法
 - user32/imm32 **不加载第三方 IMM32 IME**（实测 `ImeInquire` 从不被调用、`ImmInstallIME` 失败）
 
 因此本项目采用 **全局键盘钩子 + Unicode 文本注入** 的方式实现一个"够用"的输入法。
+同一套实现也面向现代 Windows（NT6+）的 x64/x86 环境。
 
 **目标**
 
@@ -33,8 +34,8 @@
 
 | 项目 | 要求 |
 |---|---|
-| 操作系统 | WinPE 10.0.19041 zh-CN x64 |
-| 架构 | **仅 x64** |
+| 操作系统 | WinPE 10.0.19041 zh-CN（x64 / x86）；现代 Windows（NT6+） |
+| 架构 | **支持 x64 与 x86 两种构建**（32 位用 `i686-w64-mingw32-gcc` 交叉编译）；不承诺 NT5/XP 兼容 |
 | 权限 | **需要管理员权限**；普通用户启动时自动 UAC 提权，取消则退出 |
 | 系统修改 | **不写注册表、不装服务/驱动、不改系统目录**；安装=复制文件，卸载=删除文件 |
 | 依赖 | 只用 Windows 自带 DLL；静态链接，无第三方运行时；EXE 不依赖 VCRuntime |
@@ -47,36 +48,45 @@
 运行时（放在同一目录，路径任意）：
 
 ```
-PEIMH.EXE       主程序（静态 x64，约 80 KB）
-peim.dict       中文词库（约 920 KB，可缺省）
-peim.ini        配置（可缺省）
+PEHIME.EXE      主程序（静态 x64 / x86，约 80 KB）
+pehime.dict     中文词库（约 920 KB，可缺省）
+pehime.ini      配置（可缺省）
 ```
 
 源码/构建侧命名约定：
 
 | 文件 | 用途 |
 |---|---|
+| `src/hook/hook_main.c` | 主程序：键盘钩子、状态机、候选拼接、注入队列、自检/单实例 |
+| `src/core/pehime_dict.{c,h}` | 词库读取（只读、零拷贝、音节查找） |
+| `src/core/pehime_pinyin.{c,h}` | 全拼解析、候选生成、上屏语义 |
+| `src/ui/pehime_candwin.{c,h}` | 候选窗绘制、页码与 ▲/▼ 点击转发 |
+| `src/ui/pehime_tray.{c,h}` | 托盘图标 / 右下角状态方框 |
+| `src/common/pehime_config.{c,h}` | `pehime.ini` 读取与默认配置生成 |
+| `src/common/pehime_log.{c,h}` | `PEHIME.log` 写入与轮转 |
 | `tools/words/cn_words_curated.txt` | 中文领域补充词（最高优先级） |
-| `tools/words2dict.py` | 生成 `build/peim.dict` 与 `build/peim_cn_dump.txt`；头部 `CN_WORD_FILES` 列源文件 |
+| `tools/words2dict.py` | 生成 `build/pehime.dict` 与 `build/pehime_cn_dump.txt`；头部 `CN_WORD_FILES` 列源文件 |
 | `tools/ptest.c` | 拼音核心命令行测试（开发用） |
 | `tools/licenses/` | 第三方许可全文 |
-| `build_all.cmd` | 一键构建（项目根目录） |
+| `build_all.cmd` | x64 一键构建（项目根目录；产物 `build\PEHIME.EXE`、`build\ptest.exe`） |
+| `build_x86.cmd` | 32 位一键构建（`i686-w64-mingw32-gcc`；产物 `build\x86\PEHIME.EXE`、`build\x86\ptest.exe`） |
 | `tools/get_w64devkit.ps1` | 自动下载/解压编译器 |
 | `tools/README.md` | 工具/编译器版本与下载说明 |
 
-运行时词库：`peim.dict`；源数据：`cn_words_<类别>.txt`；生成脚本：`tools/words2dict.py`（只生成中文词库）。
+运行时词库：`pehime.dict`；源数据：`cn_words_<类别>.txt`；生成脚本：`tools/words2dict.py`（只生成中文词库）。
 
 ## 4. 功能需求（FR）
 
 ### FR-00 运行方式与状态显示
-- 无需安装：三个运行文件放在同一目录（`peim.dict`、`peim.ini` 可缺省），双击/命令行启动。
+- 无需安装：三个运行文件放在同一目录（`pehime.dict`、`pehime.ini` 可缺省），双击/命令行启动。
 - 有托盘：托盘图标显示中/英（两者均为蓝底白字，背景色 `#0060AC`），左键单击切换，右键菜单可切换/退出。
 - 无托盘（WinPE）：屏幕右下角状态方框显示中/英（同样蓝底白字），左键单击切换，右键菜单可切换/退出。
+- 调试：设置环境变量 `PEHIME_INDICATOR`（非空）可强制使用右下角状态方框模式。
 - 界面始终反映当前中/英状态。
 
 ### FR-01 启动与单实例
-- 启动后读取 EXE 同目录的 `peim.dict`（可缺省）与 `peim.ini`，`log=1` 时打开 `PEIM.log`，安装全局键盘钩子。
-- 同一用户会话只允许一个实例（命名互斥体 `PEIM_HOOK_SINGLE_INSTANCE`）；重复启动直接退出。
+- 启动后读取 EXE 同目录的 `pehime.dict`（可缺省）与 `pehime.ini`，`log=1` 时打开 `PEHIME.log`，安装全局键盘钩子。
+- 同一用户会话只允许一个实例（命名互斥体 `PEHIME_HOOK_SINGLE_INSTANCE`）；重复启动直接退出。
 - 词库缺失/损坏时不得崩溃：中文退化为原文直输，英文态不受影响；`log=1` 时日志记录错误。
   加载时整段校验词条区（边界、音节 ID、字段范围），校验失败按"词库缺失"处理。
 - 低完整性进程（从 Low 标签目录启动）无法向普通程序注入：检测到后提示并退出（退出码 4）。
@@ -177,19 +187,19 @@ peim.ini        配置（可缺省）
 - 超出屏幕边缘时向内收（底部放不下时翻到上方）。
 
 ### FR-13 日志
-- 位置：EXE 同目录 `PEIM.log`（环境变量 `PEIM_LOG_DIR` 可覆盖，测试用）。
+- 位置：EXE 同目录 `PEHIME.log`（环境变量 `PEHIME_LOG_DIR` 可覆盖，测试用）。
 - 记录：启动/词库统计/钩子安装/模式切换/上屏/退出/错误。
 - `log=1` 时写日志（`log=0` 时完全不写）；`log_verbose=1` 额外记录每次按键与每次候选列表（需同时 `log=1`）。
-- 日志文件超过 512 KB 时，在下次启动打开日志时轮转为 `PEIM.log.old`。
+- 日志文件超过 512 KB 时，在下次启动打开日志时轮转为 `PEHIME.log.old`。
 
 ### FR-14 配置
-- EXE 同目录 `peim.ini`（环境变量 `PEIM_INI` 可覆盖，测试用），键值见 §7.2。
-- **`peim.ini` 不存在时自动生成默认配置文件**（UTF-8 BOM + 中文注释，键之间空行分隔，
+- EXE 同目录 `pehime.ini`（环境变量 `PEHIME_INI` 可覆盖，测试用），键值见 §7.2。
+- **`pehime.ini` 不存在时自动生成默认配置文件**（UTF-8 BOM + 中文注释，键之间空行分隔，
   默认 `page_height=20`、`log=0`，方便用记事本编辑）。
 - 所有键可选；未知键忽略；解析失败用默认值。
 
 ### FR-15 部署
-- PE 内落盘目录由使用者决定（示例：`X:\Tools\PEIM\`），复制运行文件后手动启动 `PEIMH.EXE`。
+- PE 内落盘目录由使用者决定（示例：`X:\Tools\PEHIME\`），复制运行文件后手动启动 `PEHIME.EXE`。
 - 是否加入 PE 开机启动由使用者自己的 PE 启动流程决定；本仓库不修改 boot.wim / startnet.cmd。
 - 把运行文件复制到任意可写目录后双击/命令行运行；删除文件即卸载（无需安装）。
 
@@ -246,10 +256,10 @@ peim.ini        配置（可缺省）
 
 ## 7. 数据格式
 
-### 7.1 中文词库 `peim.dict`（小端）
+### 7.1 中文词库 `pehime.dict`（小端）
 
 ```
-u32  magic = 'PEIM' (0x4D494550)
+u32  magic = 0x4D494550    # 4 字节格式标识，沿用原有二进制格式
 u16  version = 1
 u16  syllable_count
 u32  entry_count
@@ -275,14 +285,14 @@ u32  entry_count
 - 音节表按字典序排列（二分查找依赖）。
 - 生成脚本：`tools/words2dict.py`（jieba + pypinyin + wordfreq + `tools/words/cn_words_curated.txt`）。
 
-### 7.2 配置 `peim.ini`
+### 7.2 配置 `pehime.ini`
 
 | 键 | 默认 | 取值 | 说明 |
 |---|---|---|---|
 | start_cn | 0 | 0/1 | 启动即中文；默认英文，保证 PE 菜单/工具按键不被吞 |
 | page_size | 5 | 3~9 | 每页候选数 |
 | page_height | 20 | 10~40 | 候选窗字体像素高 |
-| log | 0 | 0/1 | 写 PEIM.log |
+| log | 0 | 0/1 | 写 PEHIME.log |
 | log_verbose | 0 | 0/1 | 记录按键 + 候选列表（调试） |
 
 ## 8. 非功能需求
@@ -290,26 +300,27 @@ u32  entry_count
 - **稳定性**：连续快速输入不丢键、不卡死；钩子回调只做纯计算 + 把文本入队
   （64 条注入队列；极端满溢时丢弃并记日志，回调内绝不直接 `SendInput`）。
 - **内存/体积**：EXE 约 80 KB；中文词库约 920 KB；不再需要英文词库；
-  运行时私有内存约 4 MB、工作集约 12 MB（x64，开发机实测）。
+  运行时私有内存约 4 MB、工作集约 12 MB（开发机实测）。
 - **性能**：单次按键到候选窗刷新为毫秒级（词库 7 万条；无硬性 SLA）。
 - **安全/隐私**：不联网；不读用户文档；不写系统目录/注册表；日志只写自身目录。
 - **可维护性**：C99、单线程、模块边界清晰；关键决策有注释。
-- **可测试性**：拼音核心可脱离 Windows 单测（`build\ptest.exe`）；程序支持 `--selftest`。
+- **可测试性**：拼音核心可脱离 Windows 单测（`build\ptest.exe`，32 位为 `build\x86\ptest.exe`）；程序支持 `--selftest`。
 
 ## 9. 构建与测试
 
 工具链：仓库不直接携带编译器；首次构建时如果 `tools\w64devkit` 不存在，
-`build_all.cmd` 会自动调用 `tools\get_w64devkit.ps1` 下载 w64devkit 2.11.0（GCC 16.2.0）。
-也可以先手动运行：
+`build_all.cmd`（以及 `build_x86.cmd`）会自动调用 `tools\get_w64devkit.ps1` 下载
+w64devkit 2.11.0（GCC 16.2.0）。w64devkit 同时提供 `x86_64-w64-mingw32-gcc` 与
+`i686-w64-mingw32-gcc`，分别用于 x64 与 32 位构建。也可以先手动运行：
 
 ```cmd
 powershell -ExecutionPolicy Bypass -File tools\get_w64devkit.ps1
 ```
 
-编译选项：`-O2 -Wall -Wextra -std=c99 -DUNICODE -D_UNICODE -mwindows -static -static-libgcc -s`，
+编译选项（两种架构相同）：`-O2 -Wall -Wextra -std=c99 -DUNICODE -D_UNICODE -mwindows -static -static-libgcc -s`，
 另有 `-Isrc/...` 与系统库 `-luser32 -lgdi32 -lshell32 -ladvapi32`。
 
-**每次构建都需要 Python 3.8+**（构建脚本会检查，没有则直接报错）：
+**生成词库（`build_all.cmd`）需要 Python 3.8+**（构建脚本会检查，没有则直接报错）：
 
 ```cmd
 pip install jieba pypinyin wordfreq
@@ -318,11 +329,16 @@ pip install jieba pypinyin wordfreq
 `jieba`、`pypinyin` 必需（缺失会报错）；`wordfreq` 可选，缺失时词频退回 jieba。
 
 ```cmd
-build_all.cmd    rem 每次都会：重新生成中文词库 → 编译 PEIMH.EXE / ptest.exe
+build_all.cmd    rem x64：每次都会重新生成中文词库 → 编译 build\PEHIME.EXE / build\ptest.exe
+build_x86.cmd    rem x86：用 i686-w64-mingw32-gcc 编译 build\x86\PEHIME.EXE / build\x86\ptest.exe
+                 rem      需先由 build_all.cmd 生成 build\pehime.dict；随后把 pehime.dict/pehime.ini 复制到 build\x86\
 
-build\ptest.exe build\peim.dict zhongguo nihao jisuanji    rem 核心测试
-build\ptest.exe build\peim.dict -s 2 zhongguo              rem 选中第2个候选并看上屏
-build\PEIMH.EXE --selftest                                    rem 部署自检
+build\ptest.exe build\pehime.dict zhongguo nihao jisuanji    rem x64 核心测试
+build\ptest.exe build\pehime.dict -s 2 zhongguo              rem 选中第2个候选并看上屏
+build\PEHIME.EXE --selftest                                  rem x64 部署自检
+
+build\x86\ptest.exe build\x86\pehime.dict zhongguo nihao jisuanji    rem 32 位核心测试
+build\x86\PEHIME.EXE --selftest                                      rem 32 位部署自检
 ```
 
 运行时不依赖 Python 和第三方库。
@@ -352,14 +368,19 @@ build\PEIMH.EXE --selftest                                    rem 部署自检
 | 19 | Shift 单击 | 中/英切换；候选窗短暂显示中/英提示 |
 | 20 | 托盘/方框右键「退出」 | 输入法退出、图标消失、键盘恢复正常 |
 | 21 | 再次启动 exe | 不会出现第二个实例 |
-| 22 | 删除 `peim.dict` 后启动 | 不崩溃，可原文直输（`log=1` 时日志有错误） |
-| 23 | `PEIMH.EXE --selftest` | 退出码 0（`log=1` 时日志 `SELFTEST: OK`；不装钩子、不弹窗、不提权） |
+| 22 | 删除 `pehime.dict` 后启动 | 不崩溃，可原文直输（`log=1` 时日志有错误） |
+| 23 | `PEHIME.EXE --selftest` | 退出码 0（`log=1` 时日志 `SELFTEST: OK`；不装钩子、不弹窗、不提权） |
 | 24 | 连续快速输入 20+ 字母 | 不丢键、不卡、不重复上屏 |
+| 25 | 运行 `build_x86.cmd` | 产出 `build\x86\PEHIME.EXE`、`build\x86\ptest.exe`；`build\pehime.dict`/`pehime.ini` 存在时被复制到 `build\x86\` |
+| 26 | `build\x86\ptest.exe build\x86\pehime.dict zhongguo nihao` 与 `build\x86\PEHIME.EXE --selftest` | 候选/上屏结果与 x64 一致，自检退出码 0 |
+
+第 1~24 项应在 x64 与 x86 两种构建上分别验证（32 位实机需 WinPE 10 x86 环境）；
+第 25~26 项为构建/自检项，x64 侧对应 `build_all.cmd` 与 `build\ptest.exe`、`build\PEHIME.EXE`。
 
 ## 11. 不在范围 / 已知限制
 
 - 不做双拼/五笔/手写/语音、云词库、用户词库、词频自学习、五字以上词条、皮肤/设置界面。
-- 仅 x64；不支持 32 位 PE；更早系统未验证。
+- 支持 x64 与 x86 两种构建；目标 NT6+（WinPE 10 及现代 Windows），不承诺 NT5/XP 兼容；更早系统未验证。
 - 依赖目标控件处理 `WM_CHAR`：XAML/TSF 界面（Win11 任务栏、开始菜单、新版资源管理器）不接收这种注入；
   PE 环境没有这些组件，不受影响。
 - 管理员窗口（UIPI）：本程序已整体以管理员运行，因此可向管理员窗口注入；部分自绘控件（Qt/Electron）可能无效。
@@ -379,10 +400,10 @@ build\PEIMH.EXE --selftest                                    rem 部署自检
 
 ## 13. 从零重建的推荐顺序
 
-1. **词库工具**：`tools/words2dict.py`（生成中文 `peim.dict`）
-2. **核心库**：`peim_dict`（零拷贝读 + 遍历 + 音节二分查找）、`peim_pinyin`（DP 切分/候选/提交），
+1. **词库工具**：`tools/words2dict.py`（生成中文 `pehime.dict`）
+2. **核心库**：`pehime_dict`（零拷贝读 + 遍历 + 音节二分查找）、`pehime_pinyin`（DP 切分/候选/提交），
    用 `ptest` 验证 `zhongguo`/`nihao`/`jisuanji`/长拼音
 3. **主程序**：钩子 → 状态机 → 候选生成（整串匹配/音节/前缀/简拼/原文）→ 注入队列
 4. **候选窗**：两行布局、定位、▲/▼ 点击、闪烁光标
 5. **配置/日志/自检/单实例/低完整性检测**
-6. **验证**：按第 10 节矩阵在 PE 实机逐项测试
+6. **验证**：按第 10 节矩阵在 PE 实机逐项测试（x64 与 x86 各一轮）

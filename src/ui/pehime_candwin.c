@@ -1,8 +1,8 @@
-#include "peim_candwin.h"
+#include "pehime_candwin.h"
 
 #include <string.h>
 
-#define PEIM_CAND_CLASS L"PEIMCandWnd"
+#define PEHIME_CAND_CLASS L"PEHIMECandWnd"
 
 #define CPAD_X   6
 #define CPAD_Y   5
@@ -15,7 +15,7 @@
 #define CARET_GAP 3
 
 static HWND            g_wnd;
-static PeimCandView    g_view;
+static PehimeCandView    g_view;
 static HFONT           g_font;
 static int             g_font_h = 16;
 static UINT_PTR        g_timer;        /* 中/英提示自动隐藏 */
@@ -56,27 +56,27 @@ static void mode_text(WCHAR *buf, int mode)
 }
 
 /* 当前是否是"组字显示"（第一行显示拼音） */
-static int has_pinyin_row(const PeimCandView *v)
+static int has_pinyin_row(const PehimeCandView *v)
 {
     return v->pinyin[0] != 0;
 }
 
 /* 需要几行：拼音行 + 候选行；没有候选时只显示拼音行 */
-static int row_count(const PeimCandView *v)
+static int row_count(const PehimeCandView *v)
 {
     if (!has_pinyin_row(v))
         return 1;
     return v->ncand > 0 ? 2 : 1;
 }
 
-static int pinyin_wide(const PeimCandView *v, WCHAR *wp, int cap)
+static int pinyin_wide(const PehimeCandView *v, WCHAR *wp, int cap)
 {
     int n = MultiByteToWideChar(CP_ACP, 0, v->pinyin, -1, wp, cap) - 1;
     return n > 0 ? n : 0;
 }
 
 /* 计算窗口宽度：取"拼音行"与"候选行"中较宽的一行 */
-static int measure_width(HDC dc, const PeimCandView *v)
+static int measure_width(HDC dc, const PehimeCandView *v)
 {
     SIZE sz;
     int w1 = 0, w2 = 0, i, first = 1;
@@ -91,13 +91,13 @@ static int measure_width(HDC dc, const PeimCandView *v)
     }
 
     for (i = 0; i < v->ncand; ++i) {
-        WCHAR item[PEIM_CAND_MAX_CHARS + 4];
+        WCHAR item[PEHIME_CAND_MAX_CHARS + 4];
         int n = 0;
         item[n++] = (WCHAR)('1' + i);
         item[n++] = L'.';
         {
             int k = 0;
-            while (v->cands[i][k] && k < PEIM_CAND_MAX_CHARS)
+            while (v->cands[i][k] && k < PEHIME_CAND_MAX_CHARS)
                 item[n++] = v->cands[i][k++];
         }
         GetTextExtentPoint32W(dc, item, n, &sz);
@@ -247,14 +247,14 @@ static void paint(HWND wnd)
         y = has_pinyin_row(&g_view) ? y2 : y1;
         x = CPAD_X + BORDER;
         for (i = 0; i < g_view.ncand; ++i) {
-            WCHAR item[PEIM_CAND_MAX_CHARS + 4];
+            WCHAR item[PEHIME_CAND_MAX_CHARS + 4];
             int n = 0;
             SIZE sz;
             item[n++] = (WCHAR)('1' + i);
             item[n++] = L'.';
             {
                 int k = 0;
-                while (g_view.cands[i][k] && k < PEIM_CAND_MAX_CHARS)
+                while (g_view.cands[i][k] && k < PEHIME_CAND_MAX_CHARS)
                     item[n++] = g_view.cands[i][k++];
             }
             if (i > 0)
@@ -337,11 +337,11 @@ static LRESULT CALLBACK cand_proc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
             p.x = (short)LOWORD(lp);
             p.y = (short)HIWORD(lp);
             if (PtInRect(&g_up_rect, p)) {
-                PostMessageW(g_view.notify, PEIM_CAND_MSG_PAGE, (WPARAM)-1, 0);
+                PostMessageW(g_view.notify, PEHIME_CAND_MSG_PAGE, (WPARAM)-1, 0);
                 return 0;
             }
             if (PtInRect(&g_dn_rect, p)) {
-                PostMessageW(g_view.notify, PEIM_CAND_MSG_PAGE, (WPARAM)+1, 0);
+                PostMessageW(g_view.notify, PEHIME_CAND_MSG_PAGE, (WPARAM)+1, 0);
                 return 0;
             }
         }
@@ -352,7 +352,7 @@ static LRESULT CALLBACK cand_proc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(wnd, msg, wp, lp);
 }
 
-HWND peim_cand_create(HINSTANCE hinst)
+HWND pehime_cand_create(HINSTANCE hinst)
 {
     WNDCLASSEXW wc;
 
@@ -364,17 +364,17 @@ HWND peim_cand_create(HINSTANCE hinst)
     wc.lpfnWndProc = cand_proc;
     wc.hInstance = hinst;
     wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
-    wc.lpszClassName = PEIM_CAND_CLASS;
+    wc.lpszClassName = PEHIME_CAND_CLASS;
     RegisterClassExW(&wc);
 
     g_wnd = CreateWindowExW(
         WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST,
-        PEIM_CAND_CLASS, L"", WS_POPUP,
+        PEHIME_CAND_CLASS, L"", WS_POPUP,
         0, 0, 10, 10, NULL, NULL, hinst, NULL);
     return g_wnd;
 }
 
-void peim_cand_destroy(HWND wnd)
+void pehime_cand_destroy(HWND wnd)
 {
     if (wnd) {
         stop_timers(wnd);
@@ -387,7 +387,7 @@ void peim_cand_destroy(HWND wnd)
     }
 }
 
-void peim_cand_show(HWND wnd, const PeimCandView *view, POINT pt_screen)
+void pehime_cand_show(HWND wnd, const PehimeCandView *view, POINT pt_screen)
 {
     HDC dc;
     int w, h, rows;
@@ -439,7 +439,7 @@ void peim_cand_show(HWND wnd, const PeimCandView *view, POINT pt_screen)
     UpdateWindow(wnd);
 }
 
-void peim_cand_hide(HWND wnd)
+void pehime_cand_hide(HWND wnd)
 {
     if (!wnd)
         return;
@@ -447,13 +447,13 @@ void peim_cand_hide(HWND wnd)
     ShowWindow(wnd, SW_HIDE);
 }
 
-void peim_cand_flash(HWND wnd, int mode, int font_height, POINT pt_screen)
+void pehime_cand_flash(HWND wnd, int mode, int font_height, POINT pt_screen)
 {
-    PeimCandView v;
+    PehimeCandView v;
     memset(&v, 0, sizeof(v));
     v.mode = mode;
     v.font_height = font_height > 0 ? font_height : g_font_h;
-    peim_cand_show(wnd, &v, pt_screen);
+    pehime_cand_show(wnd, &v, pt_screen);
     stop_timers(wnd);
     g_timer = SetTimer(wnd, 1, FLASH_MS, NULL);
 }

@@ -1,5 +1,5 @@
 /*
- * hook_main.c —— PEIM 钩子版输入法（面向 WinPE）v0.2
+ * hook_main.c —— PEHIME 钩子版输入法（面向 WinPE）v0.2
  *
  * 原理：WH_KEYBOARD_LL 全局键盘钩子拦截按键 → 组字/候选窗 → SendInput
  *       (KEYEVENTF_UNICODE) 把字符注入前台窗口。
@@ -25,22 +25,22 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "peim_dict.h"
-#include "peim_pinyin.h"
-#include "peim_config.h"
-#include "peim_log.h"
-#include "peim_candwin.h"
-#include "peim_tray.h"
+#include "pehime_dict.h"
+#include "pehime_pinyin.h"
+#include "pehime_config.h"
+#include "pehime_log.h"
+#include "pehime_candwin.h"
+#include "pehime_tray.h"
 
-#define PEIM_HOOK_VERSION L"0.2"
-#define PEIM_MUTEX_NAME   L"PEIM_HOOK_SINGLE_INSTANCE"
-#define WM_PEIM_INJECT    (WM_APP + 1)
-#define PEIM_PENDING_MAX  64
+#define PEHIME_HOOK_VERSION L"0.2"
+#define PEHIME_MUTEX_NAME   L"PEHIME_HOOK_SINGLE_INSTANCE"
+#define WM_PEHIME_INJECT    (WM_APP + 1)
+#define PEHIME_PENDING_MAX  64
 
 typedef struct {
     int      raw;      /* 1 = 原文候选 */
     int      early;    /* 1 = 前缀候选：上屏时吃掉整个输入缓冲 */
-    PeimCand cand;     /* pinyin 候选 */
+    PehimeCand cand;     /* pinyin 候选 */
 } HItem;
 
 static HHOOK            g_hook;
@@ -50,26 +50,26 @@ static int              g_cn = 0;
 static int              g_shift_clean;
 static int              g_quote_single;
 static int              g_quote_double;
-static PeimDict         g_dict;
+static PehimeDict         g_dict;
 static int              g_dict_ok;
-static PeimConfig       g_cfg;
+static PehimeConfig       g_cfg;
 static char             g_dir[MAX_PATH];
 static HANDLE           g_mutex;
 
 
-static char             g_typed[PEIM_MAX_RAW];
+static char             g_typed[PEHIME_MAX_RAW];
 static int              g_typed_len;
-static PeimComp         g_comp;
+static PehimeComp         g_comp;
 static int              g_parse_rc;
 
-#define PEIM_PREFIX_MAX 32768
-static HItem            g_items[PEIM_MAX_CAND];
-static HItem            g_pref[PEIM_PREFIX_MAX];
+#define PEHIME_PREFIX_MAX 32768
+static HItem            g_items[PEHIME_MAX_CAND];
+static HItem            g_pref[PEHIME_PREFIX_MAX];
 static int              g_nitems;
 static int              g_page;
 
-static WCHAR g_pending[PEIM_PENDING_MAX][PEIM_MAX_RAW + 2];
-static int   g_pending_len[PEIM_PENDING_MAX];
+static WCHAR g_pending[PEHIME_PENDING_MAX][PEHIME_MAX_RAW + 2];
+static int   g_pending_len[PEHIME_PENDING_MAX];
 static int   g_pending_head;
 static int   g_pending_count;
 
@@ -82,7 +82,7 @@ static int is_low_integrity(void)
     int low = 0;
 
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &tok)) {
-        peim_log("integrity: OpenProcessToken failed %lu", (unsigned long)GetLastError());
+        pehime_log("integrity: OpenProcessToken failed %lu", (unsigned long)GetLastError());
         return 0;
     }
     if (GetTokenInformation(tok, TokenIntegrityLevel, buf, sizeof(buf), &len)) {
@@ -91,10 +91,10 @@ static int is_low_integrity(void)
                        (DWORD)(*GetSidSubAuthorityCount(tml->Label.Sid) - 1));
         if (sub)
             rid = *sub;
-        peim_log("integrity: rid=0x%lx count=%u", (unsigned long)rid,
+        pehime_log("integrity: rid=0x%lx count=%u", (unsigned long)rid,
                  (unsigned)*GetSidSubAuthorityCount(tml->Label.Sid));
     } else {
-        peim_log("integrity: GetTokenInformation failed %lu", (unsigned long)GetLastError());
+        pehime_log("integrity: GetTokenInformation failed %lu", (unsigned long)GetLastError());
     }
     CloseHandle(tok);
     low = (rid != 0 && rid <= SECURITY_MANDATORY_LOW_RID);
@@ -126,29 +126,29 @@ static void load_dict(void)
 
     if (!g_dir[0])
         return;
-    _snprintf(path, sizeof(path) - 1, "%s\\peim.dict", g_dir);
+    _snprintf(path, sizeof(path) - 1, "%s\\pehime.dict", g_dir);
     path[sizeof(path) - 1] = 0;
     h = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
                     NULL, OPEN_EXISTING, 0, NULL);
     if (h == INVALID_HANDLE_VALUE) {
-        peim_log("ERROR: dict not found: %s", path);
+        pehime_log("ERROR: dict not found: %s", path);
         return;
     }
     size = GetFileSize(h, NULL);
     if (size <= 12 || size > 8 * 1024 * 1024) {
         CloseHandle(h);
-        peim_log("ERROR: dict size bad: %lu", (unsigned long)size);
+        pehime_log("ERROR: dict size bad: %lu", (unsigned long)size);
         return;
     }
     mem = malloc(size);
     if (mem && ReadFile(h, mem, size, &read, NULL) && read == size) {
-        if (peim_dict_open(&g_dict, mem, size) == 0) {
+        if (pehime_dict_open(&g_dict, mem, size) == 0) {
             g_dict_ok = 1;
-            peim_log("dict loaded: %u syllables, %u entries",
+            pehime_log("dict loaded: %u syllables, %u entries",
                      (unsigned)g_dict.syllable_count, (unsigned)g_dict.entry_count);
         } else {
             free(mem);
-            peim_log("ERROR: dict format bad");
+            pehime_log("ERROR: dict format bad");
         }
     } else if (mem) {
         free(mem);
@@ -172,8 +172,8 @@ static void sync_comp(void)
 {
     int i;
     memset(&g_comp, 0, sizeof(g_comp));
-    if (g_typed_len > PEIM_MAX_RAW - 1)
-        g_typed_len = PEIM_MAX_RAW - 1;
+    if (g_typed_len > PEHIME_MAX_RAW - 1)
+        g_typed_len = PEHIME_MAX_RAW - 1;
     g_comp.raw_len = (uint8_t)g_typed_len;
     for (i = 0; i < g_typed_len; ++i) {
         char c = g_typed[i];
@@ -181,17 +181,17 @@ static void sync_comp(void)
             c = (char)(c - 'A' + 'a');
         g_comp.raw[i] = c;
     }
-    g_parse_rc = g_dict_ok ? peim_comp_parse(&g_dict, &g_comp) : -1;
+    g_parse_rc = g_dict_ok ? pehime_comp_parse(&g_dict, &g_comp) : -1;
 }
 
 /* 词条拼音串是否以 prefix 开头（字符级） */
-static int entry_prefix_match(const PeimDict *d, const PeimEntry *e,
+static int entry_prefix_match(const PehimeDict *d, const PehimeEntry *e,
                               const char *pre, int plen)
 {
     int i, pos = 0;
     for (i = 0; i < e->syl_count; ++i) {
         int len = 0, k;
-        const char *nm = peim_dict_syl_name(d, peim_entry_syl(e, i), &len);
+        const char *nm = pehime_dict_syl_name(d, pehime_entry_syl(e, i), &len);
         if (!nm)
             return 0;
         for (k = 0; k < len; ++k) {
@@ -213,10 +213,10 @@ typedef struct {
 
 static int g_pref_n;
 
-static int prefix_cb(const PeimDict *d, const PeimEntry *e, void *vctx)
+static int prefix_cb(const PehimeDict *d, const PehimeEntry *e, void *vctx)
 {
     PrefixCtx *x = (PrefixCtx *)vctx;
-    if (g_pref_n >= PEIM_PREFIX_MAX)
+    if (g_pref_n >= PEHIME_PREFIX_MAX)
         return 1;
     if (x->max_syl > 0 && e->syl_count > x->max_syl)
         return 0;
@@ -238,14 +238,14 @@ static int cmp_by_weight(const void *pa, const void *pb)
 }
 
 /* 简拼匹配：词条每个音节的首字母依次等于输入，且音节数 == 输入长度 */
-static int initials_match(const PeimDict *d, const PeimEntry *e, const char *abbr, int alen)
+static int initials_match(const PehimeDict *d, const PehimeEntry *e, const char *abbr, int alen)
 {
     int i;
     if (e->syl_count != alen)
         return 0;
     for (i = 0; i < alen; ++i) {
         int len = 0;
-        const char *nm = peim_dict_syl_name(d, peim_entry_syl(e, i), &len);
+        const char *nm = pehime_dict_syl_name(d, pehime_entry_syl(e, i), &len);
         if (!nm || nm[0] != abbr[i])
             return 0;
     }
@@ -257,10 +257,10 @@ typedef struct {
     int         len;
 } InitialsCtx;
 
-static int initials_cb(const PeimDict *d, const PeimEntry *e, void *vctx)
+static int initials_cb(const PehimeDict *d, const PehimeEntry *e, void *vctx)
 {
     InitialsCtx *x = (InitialsCtx *)vctx;
-    if (g_pref_n >= PEIM_PREFIX_MAX)
+    if (g_pref_n >= PEHIME_PREFIX_MAX)
         return 1;
     if (!initials_match(d, e, x->abbr, x->len))
         return 0;
@@ -301,7 +301,7 @@ static int all_syllables_rare(void)
         return 0;
     for (i = 0; i < g_comp.nsyl; ++i) {
         int len = 0;
-        const char *nm = peim_dict_syl_name(&g_dict, g_comp.syl[i], &len);
+        const char *nm = pehime_dict_syl_name(&g_dict, g_comp.syl[i], &len);
         if (!nm || !is_rare_syl_name(nm, len))
             return 0;
     }
@@ -309,42 +309,42 @@ static int all_syllables_rare(void)
 }
 
 /* 词条拼音串总长度（用于判断"整串完全匹配"） */
-static int entry_pinyin_len(const PeimDict *d, const PeimEntry *e)
+static int entry_pinyin_len(const PehimeDict *d, const PehimeEntry *e)
 {
     int i, sum = 0;
     for (i = 0; i < e->syl_count; ++i) {
         int len = 0;
-        if (!peim_dict_syl_name(d, peim_entry_syl(e, i), &len))
+        if (!pehime_dict_syl_name(d, pehime_entry_syl(e, i), &len))
             return 0;
         sum += len;
     }
     return sum;
 }
 
-static int same_entry(const PeimEntry *a, const PeimEntry *b)
+static int same_entry(const PehimeEntry *a, const PehimeEntry *b)
 {
     return a->syl == b->syl && a->text == b->text && a->syl_count == b->syl_count;
 }
 
 static void add_item_raw(void)
 {
-    if (g_nitems >= PEIM_MAX_CAND)
+    if (g_nitems >= PEHIME_MAX_CAND)
         return;
     g_items[g_nitems].raw = 1;
     g_items[g_nitems].early = 0;
-    memset(&g_items[g_nitems].cand, 0, sizeof(PeimCand));
+    memset(&g_items[g_nitems].cand, 0, sizeof(PehimeCand));
     g_nitems++;
 }
 
 static void add_item(const HItem *it)
 {
-    if (g_nitems >= PEIM_MAX_CAND)
+    if (g_nitems >= PEHIME_MAX_CAND)
         return;
     g_items[g_nitems] = *it;
     g_nitems++;
 }
 
-static int item_has(const PeimEntry *e)
+static int item_has(const PehimeEntry *e)
 {
     int i;
     for (i = 0; i < g_nitems; ++i) {
@@ -357,7 +357,7 @@ static int item_has(const PeimEntry *e)
 static void refresh_cands(void)
 {
     int i, np, eng, has_tail, prefix_first;
-    PeimCand pc[PEIM_MAX_CAND];
+    PehimeCand pc[PEHIME_MAX_CAND];
     PrefixCtx px;
 
     g_nitems = 0;
@@ -374,7 +374,7 @@ static void refresh_cands(void)
     /* 先算音节候选（简拼分支后面也会用到） */
     np = 0;
     if (g_parse_rc == 0 && g_comp.nsyl > 0)
-        np = peim_comp_candidates(&g_dict, &g_comp, pc, PEIM_MAX_CAND);
+        np = pehime_comp_candidates(&g_dict, &g_comp, pc, PEHIME_MAX_CAND);
 
     /* 简拼：输入不是合法拼音（ck / cxy / cpgl），
      * 或者虽然能解析但只切出 n/m/ng/hng 这类非标准音节（如 nh = n + h） */
@@ -385,7 +385,7 @@ static void refresh_cands(void)
         ix.abbr = g_comp.raw;
         ix.len = g_comp.raw_len;
         g_pref_n = 0;
-        peim_dict_each(&g_dict, initials_cb, &ix);
+        pehime_dict_each(&g_dict, initials_cb, &ix);
         if (g_pref_n > 1)
             qsort(g_pref, (size_t)g_pref_n, sizeof(HItem), cmp_by_weight);
         if (g_pref_n > 0) {
@@ -424,7 +424,7 @@ static void refresh_cands(void)
     px.max_syl = g_comp.nsyl + (has_tail ? 1 : 0);
     g_pref_n = 0;
     if (px.plen > 0)
-        peim_dict_each(&g_dict, prefix_cb, &px);
+        pehime_dict_each(&g_dict, prefix_cb, &px);
     if (g_pref_n > 1)
         qsort(g_pref, (size_t)g_pref_n, sizeof(HItem), cmp_by_weight);
 
@@ -505,26 +505,26 @@ static void queue_inject(const WCHAR *text, int len)
     int idx;
     if (!text || len <= 0)
         return;
-    if (len > PEIM_MAX_RAW)
-        len = PEIM_MAX_RAW;
-    if (g_pending_count >= PEIM_PENDING_MAX) {
+    if (len > PEHIME_MAX_RAW)
+        len = PEHIME_MAX_RAW;
+    if (g_pending_count >= PEHIME_PENDING_MAX) {
         /* 正常不会满（单次按键最多上屏 32 个音节 + 1 个标点，队列 64 条）；
          * 真满了也只能丢弃，绝不能在低级钩子回调里直接 SendInput（会死锁/乱序）。 */
-        peim_log("ERROR: inject queue full, drop %d chars", len);
+        pehime_log("ERROR: inject queue full, drop %d chars", len);
         return;
     }
-    idx = (g_pending_head + g_pending_count) % PEIM_PENDING_MAX;
+    idx = (g_pending_head + g_pending_count) % PEHIME_PENDING_MAX;
     memcpy(g_pending[idx], text, (size_t)len * sizeof(WCHAR));
     g_pending_len[idx] = len;
     g_pending_count++;
-    PostMessageW(g_msgwnd, WM_PEIM_INJECT, 0, 0);
+    PostMessageW(g_msgwnd, WM_PEHIME_INJECT, 0, 0);
 }
 
 static void queue_inject_ascii_len(const char *s, int len)
 {
-    WCHAR buf[PEIM_MAX_RAW + 1];
+    WCHAR buf[PEHIME_MAX_RAW + 1];
     int i, n = 0;
-    for (i = 0; i < len && n < PEIM_MAX_RAW; ++i)
+    for (i = 0; i < len && n < PEHIME_MAX_RAW; ++i)
         buf[n++] = (WCHAR)(unsigned char)s[i];
     queue_inject(buf, n);
 }
@@ -533,7 +533,7 @@ static void flush_inject(void)
 {
     while (g_pending_count > 0) {
         inject_direct(g_pending[g_pending_head], g_pending_len[g_pending_head]);
-        g_pending_head = (g_pending_head + 1) % PEIM_PENDING_MAX;
+        g_pending_head = (g_pending_head + 1) % PEHIME_PENDING_MAX;
         g_pending_count--;
     }
 }
@@ -567,14 +567,14 @@ static void get_anchor(POINT *pt)
 
 static void update_window_at(const POINT *anchor)
 {
-    PeimCandView v;
+    PehimeCandView v;
     POINT pt;
     int ps, start, n, i, k;
 
     if (!g_candwnd)
         return;
     if (g_typed_len == 0 && g_nitems == 0) {
-        peim_cand_hide(g_candwnd);
+        pehime_cand_hide(g_candwnd);
         return;
     }
     if (anchor)
@@ -598,19 +598,19 @@ static void update_window_at(const POINT *anchor)
         n = 0;
     if (n > ps)
         n = ps;
-    if (n > PEIM_CAND_MAX_ITEMS)
-        n = PEIM_CAND_MAX_ITEMS;
+    if (n > PEHIME_CAND_MAX_ITEMS)
+        n = PEHIME_CAND_MAX_ITEMS;
     v.ncand = n;
     for (i = 0; i < n; ++i) {
         HItem *it = &g_items[start + i];
         if (it->raw) {
-            for (k = 0; k < g_typed_len && k < PEIM_CAND_MAX_CHARS; ++k)
+            for (k = 0; k < g_typed_len && k < PEHIME_CAND_MAX_CHARS; ++k)
                 v.cands[i][k] = (WCHAR)(unsigned char)g_typed[k];
             v.cands[i][k] = 0;
         } else {
-            const PeimEntry *e = &it->cand.e;
-            for (k = 0; k < e->text_len && k < PEIM_CAND_MAX_CHARS; ++k)
-                v.cands[i][k] = (WCHAR)peim_entry_char(e, k);
+            const PehimeEntry *e = &it->cand.e;
+            for (k = 0; k < e->text_len && k < PEHIME_CAND_MAX_CHARS; ++k)
+                v.cands[i][k] = (WCHAR)pehime_entry_char(e, k);
             v.cands[i][k] = 0;
         }
     }
@@ -625,9 +625,9 @@ static void update_window_at(const POINT *anchor)
             WideCharToMultiByte(CP_UTF8, 0, v.cands[j], -1, mb, sizeof(mb), NULL, NULL);
             off += _snprintf(line + off, sizeof(line) - off, " %s", mb);
         }
-        peim_log("%s", line);
+        pehime_log("%s", line);
     }
-    peim_cand_show(g_candwnd, &v, pt);
+    pehime_cand_show(g_candwnd, &v, pt);
 }
 
 static void update_window(void)
@@ -654,7 +654,7 @@ static void update_window_keep_pos(void)
 static void hide_window(void)
 {
     if (g_candwnd)
-        peim_cand_hide(g_candwnd);
+        pehime_cand_hide(g_candwnd);
 }
 
 static void flash_mode(void)
@@ -663,7 +663,7 @@ static void flash_mode(void)
     if (!g_candwnd)
         return;
     get_anchor(&pt);
-    peim_cand_flash(g_candwnd, g_cn, g_cfg.page_height, pt);
+    pehime_cand_flash(g_candwnd, g_cn, g_cfg.page_height, pt);
 }
 
 /* ------------------------------------------------------------------ */
@@ -675,7 +675,7 @@ static void commit_raw_typed(void)
     if (g_typed_len == 0)
         return;
     queue_inject_ascii_len(g_typed, g_typed_len);
-    peim_log("commit raw '%.*s'", g_typed_len, g_typed);
+    pehime_log("commit raw '%.*s'", g_typed_len, g_typed);
     clear_all();
     hide_window();
 }
@@ -683,7 +683,7 @@ static void commit_raw_typed(void)
 static void select_item(int idx)
 {
     HItem *it;
-    uint16_t text[PEIM_CAND_MAX_CHARS];
+    uint16_t text[PEHIME_CAND_MAX_CHARS];
     int n, i, end = 0;
 
     if (idx < 0 || idx >= g_nitems)
@@ -695,14 +695,14 @@ static void select_item(int idx)
         return;
     }
     if (it->early) {
-        WCHAR out[PEIM_CAND_MAX_CHARS];
+        WCHAR out[PEHIME_CAND_MAX_CHARS];
         n = it->cand.e.text_len;
-        if (n > PEIM_CAND_MAX_CHARS)
-            n = PEIM_CAND_MAX_CHARS;
+        if (n > PEHIME_CAND_MAX_CHARS)
+            n = PEHIME_CAND_MAX_CHARS;
         for (i = 0; i < n; ++i)
-            out[i] = (WCHAR)peim_entry_char(&it->cand.e, i);
+            out[i] = (WCHAR)pehime_entry_char(&it->cand.e, i);
         queue_inject(out, n);
-        peim_log("select[%d] early -> %d chars", idx, n);
+        pehime_log("select[%d] early -> %d chars", idx, n);
         clear_all();
         hide_window();
         return;
@@ -710,16 +710,16 @@ static void select_item(int idx)
 
     if (it->cand.consumed > 0)
         end = (int)g_comp.syl_end[it->cand.consumed - 1];
-    n = peim_comp_commit(&g_dict, &g_comp, &it->cand, text, PEIM_CAND_MAX_CHARS);
+    n = pehime_comp_commit(&g_dict, &g_comp, &it->cand, text, PEHIME_CAND_MAX_CHARS);
     if (n < 0)
         return;
     {
-        WCHAR out[PEIM_CAND_MAX_CHARS];
+        WCHAR out[PEHIME_CAND_MAX_CHARS];
         for (i = 0; i < n; ++i)
             out[i] = (WCHAR)text[i];
         queue_inject(out, n);
     }
-    peim_log("select[%d] -> %d chars, consumed=%d, raw_end=%d",
+    pehime_log("select[%d] -> %d chars, consumed=%d, raw_end=%d",
              idx, n, (int)it->cand.consumed, end);
     if (end > 0 && end <= g_typed_len) {
         memmove(g_typed, g_typed + end, (size_t)(g_typed_len - end));
@@ -777,9 +777,9 @@ static void toggle_mode(void)
     g_shift_clean = 0;   /* 托盘/方框切换后，松开 Shift 不再触发第二次切换 */
     g_quote_single = 0;
     g_quote_double = 0;
-    peim_log("toggle -> %s", g_cn ? "CN" : "EN");
+    pehime_log("toggle -> %s", g_cn ? "CN" : "EN");
     clear_all();
-    peim_tray_set_mode(g_cn);
+    pehime_tray_set_mode(g_cn);
     flash_mode();
 }
 
@@ -889,14 +889,14 @@ static int handle_key(UINT vk, int down)
             queue_inject(punct, plen);
             hide_window();
             if (g_cfg.log_verbose)
-                peim_log("punct len=%d first=U+%04X", plen, (unsigned)punct[0]);
+                pehime_log("punct len=%d first=U+%04X", plen, (unsigned)punct[0]);
             return 1;
         }
     }
 
     if (is_letter_vk(vk)) {
         char ch;
-        if (g_typed_len >= PEIM_MAX_RAW - 1)
+        if (g_typed_len >= PEHIME_MAX_RAW - 1)
             return 1;
         ch = shift ? (char)vk : (char)(vk - 'A' + 'a');
         g_typed[g_typed_len++] = ch;
@@ -904,7 +904,7 @@ static int handle_key(UINT vk, int down)
         refresh_cands();
         update_window();
         if (g_cfg.log_verbose)
-            peim_log("letter %c raw='%.*s' items=%d", ch, g_typed_len, g_typed, g_nitems);
+            pehime_log("letter %c raw='%.*s' items=%d", ch, g_typed_len, g_typed, g_nitems);
         return 1;
     }
 
@@ -1005,20 +1005,20 @@ static int wstr_has(const WCHAR *s, const WCHAR *sub)
 static LRESULT CALLBACK msg_proc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     (void)wnd; (void)lp;
-    if (msg == WM_PEIM_INJECT) {
+    if (msg == WM_PEHIME_INJECT) {
         flush_inject();
         return 0;
     }
-    if (msg == PEIM_TRAY_MSG_TOGGLE) {
+    if (msg == PEHIME_TRAY_MSG_TOGGLE) {
         toggle_mode();
         return 0;
     }
-    if (msg == PEIM_TRAY_MSG_QUIT) {
-        peim_log("quit from tray");
+    if (msg == PEHIME_TRAY_MSG_QUIT) {
+        pehime_log("quit from tray");
         PostQuitMessage(0);
         return 0;
     }
-    if (msg == PEIM_CAND_MSG_PAGE) {
+    if (msg == PEHIME_CAND_MSG_PAGE) {
         int ps = page_size();
         if ((int)wp < 0) {
             if (g_page > 0)
@@ -1124,13 +1124,13 @@ static DWORD relaunch_as_admin(void)
 
     if (!ShellExecuteExW(&sei)) {
         rc = GetLastError();
-        peim_log("elevate: ShellExecuteEx failed %lu", (unsigned long)rc);
+        pehime_log("elevate: ShellExecuteEx failed %lu", (unsigned long)rc);
         free(params);
         return rc;
     }
     if (sei.hProcess)
         CloseHandle(sei.hProcess);
-    peim_log("elevate: launched elevated instance");
+    pehime_log("elevate: launched elevated instance");
     free(params);
     return 0;
 }
@@ -1143,23 +1143,23 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE prev, LPSTR cmd, int show)
     (void)prev; (void)cmd; (void)show;
 
     get_dir();
-    peim_config_load(&g_cfg, g_dir);
+    pehime_config_load(&g_cfg, g_dir);
     if (g_cfg.log)
-        peim_log_open(g_dir);
+        pehime_log_open(g_dir);
     g_cn = g_cfg.start_cn ? 1 : 0;
-    peim_log("PEIMH start, dir=%s, start_cn=%d, ver=%ls", g_dir, g_cn, PEIM_HOOK_VERSION);
+    pehime_log("PEHIME start, dir=%s, start_cn=%d, ver=%ls", g_dir, g_cn, PEHIME_HOOK_VERSION);
 
     /* 测试模式：不弹窗、不提权、不装钩子；完成自检后直接退出 */
     if (wstr_has(GetCommandLineW(), L"--selftest")) {
         HWND cw;
         load_dict();
-        cw = peim_cand_create(hinst);
-        peim_log("SELFTEST: dict_ok=%d candwnd=%p version=%ls",
-                 g_dict_ok, (void *)cw, PEIM_HOOK_VERSION);
+        cw = pehime_cand_create(hinst);
+        pehime_log("SELFTEST: dict_ok=%d candwnd=%p version=%ls",
+                 g_dict_ok, (void *)cw, PEHIME_HOOK_VERSION);
         if (cw)
-            peim_cand_destroy(cw);
-        peim_log("SELFTEST: %s", g_dict_ok ? "OK" : "FAILED (dict missing/bad)");
-        peim_log_close();
+            pehime_cand_destroy(cw);
+        pehime_log("SELFTEST: %s", g_dict_ok ? "OK" : "FAILED (dict missing/bad)");
+        pehime_log_close();
         return g_dict_ok ? 0 : 3;
     }
 
@@ -1167,55 +1167,55 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE prev, LPSTR cmd, int show)
     if (!is_privileged()) {
         DWORD er;
         if (wstr_has(GetCommandLineW(), L"--elevated")) {
-            peim_log("ERROR: elevation requested but still not privileged");
+            pehime_log("ERROR: elevation requested but still not privileged");
             MessageBoxW(NULL,
-                        L"PEIM 需要管理员权限才能运行。\n请右键选择“以管理员身份运行”。",
-                        L"PEIM 输入法", MB_ICONERROR | MB_OK);
-            peim_log_close();
+                        L"PEHIME 需要管理员权限才能运行。\n请右键选择“以管理员身份运行”。",
+                        L"PEHIME 输入法", MB_ICONERROR | MB_OK);
+            pehime_log_close();
             return 5;
         }
         er = relaunch_as_admin();
         if (er == 0) {
-            peim_log("elevate: parent exits");
-            peim_log_close();
+            pehime_log("elevate: parent exits");
+            pehime_log_close();
             return 0;
         }
-        peim_log("ERROR: elevation failed: %lu", (unsigned long)er);
+        pehime_log("ERROR: elevation failed: %lu", (unsigned long)er);
         MessageBoxW(NULL,
                     er == ERROR_CANCELLED
-                        ? L"需要管理员权限才能使用 PEIM；已取消提权。"
-                        : L"无法获得管理员权限，PEIM 无法运行。",
-                    L"PEIM 输入法", MB_ICONERROR | MB_OK);
-        peim_log_close();
+                        ? L"需要管理员权限才能使用 PEHIME；已取消提权。"
+                        : L"无法获得管理员权限，PEHIME 无法运行。",
+                    L"PEHIME 输入法", MB_ICONERROR | MB_OK);
+        pehime_log_close();
         return 5;
     }
 
     /* 单实例：管理员进程之间用命名互斥体 */
-    g_mutex = CreateMutexW(NULL, TRUE, PEIM_MUTEX_NAME);
+    g_mutex = CreateMutexW(NULL, TRUE, PEHIME_MUTEX_NAME);
     if (!g_mutex) {
         if (GetLastError() == ERROR_ACCESS_DENIED) {
-            peim_log("another instance (access denied), exit");
-            peim_log_close();
+            pehime_log("another instance (access denied), exit");
+            pehime_log_close();
             return 0;
         }
-        peim_log("ERROR: CreateMutex failed %lu", (unsigned long)GetLastError());
-        peim_log_close();
+        pehime_log("ERROR: CreateMutex failed %lu", (unsigned long)GetLastError());
+        pehime_log_close();
         return 1;
     }
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        peim_log("another instance, exit");
-        peim_log_close();
+        pehime_log("another instance, exit");
+        pehime_log_close();
         return 0;
     }
 
     /* 已提权后通常不会低完整性；保留兜底提示 */
     if (is_low_integrity()) {
-        peim_log("ERROR: running at low integrity, cannot inject into normal apps");
+        pehime_log("ERROR: running at low integrity, cannot inject into normal apps");
         MessageBoxW(NULL,
-                    L"PEIM 当前以低权限运行，无法向普通程序输入文字。\n"
-                    L"请以管理员身份重新启动 PEIMH.EXE。",
-                    L"PEIM 输入法", MB_ICONERROR | MB_OK);
-        peim_log_close();
+                    L"PEHIME 当前以低权限运行，无法向普通程序输入文字。\n"
+                    L"请以管理员身份重新启动 PEHIME.EXE。",
+                    L"PEHIME 输入法", MB_ICONERROR | MB_OK);
+        pehime_log_close();
         return 4;
     }
 
@@ -1225,35 +1225,35 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE prev, LPSTR cmd, int show)
     wc.cbSize = sizeof(wc);
     wc.lpfnWndProc = msg_proc;
     wc.hInstance = hinst;
-    wc.lpszClassName = L"PEIMHookMsgWnd";
+    wc.lpszClassName = L"PEHIMEHookMsgWnd";
     RegisterClassExW(&wc);
-    msgwnd = CreateWindowExW(0, L"PEIMHookMsgWnd", L"", 0, 0, 0, 0, 0,
+    msgwnd = CreateWindowExW(0, L"PEHIMEHookMsgWnd", L"", 0, 0, 0, 0, 0,
                              HWND_MESSAGE, NULL, hinst, NULL);
     g_msgwnd = msgwnd;
     if (!msgwnd) {
-        peim_log("ERROR: CreateWindow failed %lu", (unsigned long)GetLastError());
-        peim_log_close();
+        pehime_log("ERROR: CreateWindow failed %lu", (unsigned long)GetLastError());
+        pehime_log_close();
         return 1;
     }
 
-    g_candwnd = peim_cand_create(hinst);
-    peim_log("candwnd=%p dict_ok=%d", (void *)g_candwnd, g_dict_ok);
+    g_candwnd = pehime_cand_create(hinst);
+    pehime_log("candwnd=%p dict_ok=%d", (void *)g_candwnd, g_dict_ok);
 
     {
-        int ui = peim_tray_init(hinst, msgwnd);
-        peim_tray_set_mode(g_cn);
-        peim_log("UI: %s, mode=%s",
+        int ui = pehime_tray_init(hinst, msgwnd);
+        pehime_tray_set_mode(g_cn);
+        pehime_log("UI: %s, mode=%s",
                  ui == 1 ? "tray icon" : ui == 0 ? "corner indicator" : "FAILED",
                  g_cn ? "CN" : "EN");
     }
 
     g_hook = SetWindowsHookExW(WH_KEYBOARD_LL, ll_proc, hinst, 0);
     if (!g_hook) {
-        peim_log("ERROR: SetWindowsHookEx failed %lu", (unsigned long)GetLastError());
-        peim_log_close();
+        pehime_log("ERROR: SetWindowsHookEx failed %lu", (unsigned long)GetLastError());
+        pehime_log_close();
         return 1;
     }
-    peim_log("hook installed");
+    pehime_log("hook installed");
 
     while (GetMessageW(&msg, NULL, 0, 0) > 0) {
         TranslateMessage(&msg);
@@ -1265,10 +1265,10 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE prev, LPSTR cmd, int show)
         g_hook = NULL;
     }
 
-    peim_tray_destroy();
-    peim_cand_destroy(g_candwnd);
-    peim_log("PEIMH exit");
-    peim_log_close();
+    pehime_tray_destroy();
+    pehime_cand_destroy(g_candwnd);
+    pehime_log("PEHIME exit");
+    pehime_log_close();
     if (g_mutex) {
         ReleaseMutex(g_mutex);
         CloseHandle(g_mutex);

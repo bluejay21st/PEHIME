@@ -1,4 +1,4 @@
-#include "peim_config.h"
+#include "pehime_config.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -19,7 +19,7 @@ static void trim(char *s)
         s[--n] = 0;
 }
 
-/* peim.ini 不存在时生成默认配置（UTF-8 BOM + 中文注释，方便在 PE 里用记事本编辑） */
+/* pehime.ini 不存在时生成默认配置（UTF-8 BOM + 中文注释，方便在 PE 里用记事本编辑） */
 static void write_default_config(const char *path)
 {
     FILE *f = fopen(path, "w");
@@ -43,7 +43,7 @@ static void write_default_config(const char *path)
     fclose(f);
 }
 
-void peim_config_load(PeimConfig *cfg, const char *exe_dir)
+void pehime_config_load(PehimeConfig *cfg, const char *exe_dir)
 {
     char path[MAX_PATH * 2];
     FILE *f;
@@ -60,13 +60,13 @@ void peim_config_load(PeimConfig *cfg, const char *exe_dir)
     if (!exe_dir || !exe_dir[0])
         return;
 
-    /* 环境变量 PEIM_INI 可覆盖路径（测试用），默认读 EXE 同目录的 peim.ini */
+    /* 环境变量 PEHIME_INI 可覆盖路径（测试用），默认读 EXE 同目录的 pehime.ini */
     {
-        const char *ini = getenv("PEIM_INI");
+        const char *ini = getenv("PEHIME_INI");
         if (ini && ini[0])
             lstrcpynA(path, ini, (int)(sizeof(path) - 1));
         else
-            _snprintf(path, sizeof(path) - 1, "%s\\peim.ini", exe_dir);
+            _snprintf(path, sizeof(path) - 1, "%s\\pehime.ini", exe_dir);
         path[sizeof(path) - 1] = 0;
     }
 
