@@ -1,6 +1,6 @@
 # PEHIME 项目交接笔记（新会话请先读本文件）
 
-更新时间：2026-11-05 · 当前版本 **v0.2.1** · 发布提交 `af007c3` · 工作区 `D:\Projects\PEIM`
+更新时间：2026-11-10 · 当前版本 **v0.2.1** · 发布提交 `af007c3` · 工作区 `D:\Projects\PEHIME`
 
 > 本文件是给接手开发的新会话/新同学的“重点记忆”，不替代 README 和实现指南。
 > 阅读顺序建议：本文件 → `README.md` → `docs/AI_REPRODUCTION_GUIDE.md`。
@@ -14,7 +14,7 @@
   - 资产：`PEHIME-v0.2.1-x64.zip`、`PEHIME-v0.2.1-x86.zip` 及各自 `.sha256`
 - 旧发布：`v0.1`、`v0.2` 保留未动（旧资产仍是 `PEIM-*` 命名）
 - 本地 `main` 与 `origin/main` 同步；`build/`、`dist/`、`.tmp/`、`tools/w64devkit/` 均被 `.gitignore` 忽略
-- 本地目录名仍是 `D:\Projects\PEIM`，但产品/文件命名均已改为 PEHIME
+- 本地目录已改为 `D:\Projects\PEHIME`，产品/文件命名均为 PEHIME
 
 ## 2. 项目是什么
 
